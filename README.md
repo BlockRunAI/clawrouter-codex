@@ -71,6 +71,18 @@ For Codex **Desktop**, the picker only renders custom models when the provider h
 `requires_openai_auth = true` (the bridge ignores the forwarded ChatGPT token and
 still pays via the wallet).
 
+## Dashboard
+
+A small loopback panel — wallet balance, 7-day spend/usage, top models, and the
+master switches (web search, desktop ClawRouter mode) — served by the bridge:
+
+```
+http://localhost:8403/dashboard
+```
+
+Wallet + spend come from the proxy's `/health` and `/stats`; the web-search switch
+is clickable. Loopback-only (it reads wallet state and edits config).
+
 ## Web search (a switch)
 
 Codex's built-in `web_search` is a *hosted* tool that only OpenAI's backend runs,

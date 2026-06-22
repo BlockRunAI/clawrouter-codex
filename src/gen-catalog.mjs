@@ -96,13 +96,19 @@ async function main() {
   // NVIDIA-hosted models mirror the free tier — drop them so each open model
   // appears once (as the free entry). Add families here to hide them.
   const DROP_FAMILIES = new Set((process.env.DROP_FAMILIES ?? "nvidia").split(",").filter(Boolean));
+  // Specific slugs to hide: stale gateway entries that silently redirect elsewhere
+  // (e.g. deepseek-v4-pro was delisted 2026-04-30 and redirects to v4-flash, so
+  // showing "DeepSeek V4 Pro (free)" is doubly wrong — not pro, not really there).
+  const DROP_MODELS = new Set(
+    (process.env.DROP_MODELS ?? "free/deepseek-v4-pro,deepseek/deepseek-v4-pro").split(",").filter(Boolean),
+  );
 
   // Canonical "provider/model" slugs; drop bare aliases (no digit in the tail,
   // e.g. anthropic/claude, openai/gpt), media-gen models, and dropped families.
   const canonical = all.filter((id) => {
     const [fam, ...rest] = id.split("/");
     const tail = rest.join("/");
-    return tail && /\d/.test(tail) && !MEDIA.test(id) && !DROP_FAMILIES.has(fam);
+    return tail && /\d/.test(tail) && !MEDIA.test(id) && !DROP_FAMILIES.has(fam) && !DROP_MODELS.has(id);
   });
 
   // Group by model SERIES (version stripped), de-dup dashed/dotted spellings,

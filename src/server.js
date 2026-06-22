@@ -10,6 +10,7 @@
 
 import { createServer } from "node:http";
 import { responsesToChat, chatToResponsesEvents, eventsToSSE } from "./translate.js";
+import * as Dashboard from "./dashboard.js";
 
 const DEFAULT_PORT = 8403;
 const DEFAULT_UPSTREAM = "http://127.0.0.1:8402/v1";
@@ -248,6 +249,30 @@ export function createBridge({ upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } 
     }
     if (req.method === "GET" && (req.url === "/api/version" || req.url?.startsWith("/api/version?"))) {
       handleOllamaVersion(req, res);
+      return;
+    }
+    // Dashboard: wallet balance, spend/usage, master switches.
+    if (req.method === "GET" && (req.url === "/dashboard" || req.url === "/dashboard/")) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(Dashboard.HTML);
+      return;
+    }
+    if (req.method === "GET" && req.url === "/dashboard/api") {
+      Dashboard.getData(upstream, fetchImpl)
+        .then((d) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(d)); })
+        .catch((e) => { res.writeHead(500, { "content-type": "application/json" }); res.end(JSON.stringify({ error: e.message })); });
+      return;
+    }
+    if (req.method === "POST" && req.url?.startsWith("/dashboard/api/toggle")) {
+      const name = new URL(req.url, "http://localhost").searchParams.get("name");
+      try {
+        if (name === "websearch") Dashboard.setWebSearch(!Dashboard.toggleStates().webSearch);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, toggles: Dashboard.toggleStates() }));
+      } catch (e) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
       return;
     }
     if (req.method === "POST" && req.url === "/v1/responses") {
