@@ -66,7 +66,12 @@ function prettyName(id) {
   return titled;
 }
 
-/** Parse a slug into {family, line, version} for de-duping + latest-N selection. */
+/**
+ * Parse a slug for de-duping + latest-N selection. `slug` is the ORIGINAL gateway
+ * id (must be sent verbatim — the gateway keeps dashes in param sizes like
+ * "mistral-small-4-119b" and some version separators); `key` is the normalized
+ * form used only to collapse dashed/dotted spelling duplicates.
+ */
 function parseModel(id) {
   const norm = normSlug(id);
   const family = norm.split("/")[0];
@@ -77,7 +82,7 @@ function parseModel(id) {
   // line = the tail with its trailing version token stripped (groups versions of
   // the same model series together, e.g. claude-opus-4.7 / -4.6 → "claude-opus")
   const line = tail.replace(/[-.]?\d+(?:\.\d+)?(?:-?[a-z]+\d*)?$/i, "").replace(/[-.]$/, "") || tail;
-  return { slug: norm, family, line: `${family}/${line}`, version };
+  return { slug: id, key: norm, family, line: `${family}/${line}`, version };
 }
 
 async function main() {
@@ -107,8 +112,8 @@ async function main() {
   const seen = new Set();
   for (const id of canonical) {
     const m = parseModel(id);
-    if (seen.has(m.slug)) continue; // normalized-slug dedup
-    seen.add(m.slug);
+    if (seen.has(m.key)) continue; // collapse dashed/dotted spelling duplicates
+    seen.add(m.key);
     if (!series.has(m.line)) series.set(m.line, []);
     series.get(m.line).push(m);
   }
