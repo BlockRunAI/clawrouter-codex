@@ -12,7 +12,11 @@
     "./translate": "./src/translate.js"
   },
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node scripts/start.mjs",
+    "bridge": "node src/server.js",
+    "gen-catalog": "node src/gen-catalog.mjs",
+    "install-daemon": "node scripts/install-daemon.mjs",
+    "uninstall-daemon": "node scripts/install-daemon.mjs uninstall",
     "test": "node --test"
   },
   "engines": {
@@ -20,6 +24,7 @@
   },
   "files": [
     "src",
+    "scripts",
     "README.md"
   ],
   "keywords": ["codex", "clawrouter", "blockrun", "responses-api", "x402", "llm-router"]
