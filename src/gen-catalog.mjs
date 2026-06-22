@@ -87,32 +87,35 @@ async function main() {
   if (!res.ok) throw new Error(`GET ${proxy}/models failed: ${res.status}`);
   const list = await res.json();
   const all = (Array.isArray(list?.data) ? list.data : []).map((m) => m.id).filter(Boolean);
-  const perFamily = Number(arg("--per-family", process.env.PER_FAMILY ?? "3"));
+  const perSeries = Number(arg("--per-series", process.env.PER_SERIES ?? "3"));
+  // NVIDIA-hosted models mirror the free tier — drop them so each open model
+  // appears once (as the free entry). Add families here to hide them.
+  const DROP_FAMILIES = new Set((process.env.DROP_FAMILIES ?? "nvidia").split(",").filter(Boolean));
 
   // Canonical "provider/model" slugs; drop bare aliases (no digit in the tail,
-  // e.g. anthropic/claude, openai/gpt) and media-gen models.
-  const canonical = all.filter(
-    (id) => id.includes("/") && /\d/.test(id.split("/").slice(1).join("/")) && !MEDIA.test(id),
-  );
+  // e.g. anthropic/claude, openai/gpt), media-gen models, and dropped families.
+  const canonical = all.filter((id) => {
+    const [fam, ...rest] = id.split("/");
+    const tail = rest.join("/");
+    return tail && /\d/.test(tail) && !MEDIA.test(id) && !DROP_FAMILIES.has(fam);
+  });
 
-  // Collapse each model SERIES to its latest version (dedups dashed/dotted dups
-  // and old minor versions), then keep the latest `perFamily` distinct series
-  // per provider so the picker stays small and diverse.
-  const byLine = new Map();
+  // Group by model SERIES (version stripped), de-dup dashed/dotted spellings,
+  // then keep the latest `perSeries` versions of each series. So Claude Opus
+  // keeps 4.7/4.6/4.5 and GPT-5 keeps 5.5/5.4/5.3.
+  const series = new Map();
+  const seen = new Set();
   for (const id of canonical) {
     const m = parseModel(id);
-    const prev = byLine.get(m.line);
-    if (!prev || m.version > prev.version) byLine.set(m.line, m);
-  }
-  const byFamily = new Map();
-  for (const m of byLine.values()) {
-    if (!byFamily.has(m.family)) byFamily.set(m.family, []);
-    byFamily.get(m.family).push(m);
+    if (seen.has(m.slug)) continue; // normalized-slug dedup
+    seen.add(m.slug);
+    if (!series.has(m.line)) series.set(m.line, []);
+    series.get(m.line).push(m);
   }
   const picked = [];
-  for (const arr of byFamily.values()) {
+  for (const arr of series.values()) {
     arr.sort((a, b) => b.version - a.version);
-    picked.push(...arr.slice(0, perFamily));
+    picked.push(...arr.slice(0, perSeries));
   }
   picked.sort((a, b) => a.family.localeCompare(b.family) || b.version - a.version);
 
