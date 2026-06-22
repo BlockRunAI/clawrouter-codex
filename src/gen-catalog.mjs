@@ -50,7 +50,7 @@ const WORD_CASE = {
 };
 
 function prettyName(id) {
-  if (id === "auto" || id === "blockrun/auto") return "BlockRun Auto (smart routing)";
+  if (id === "auto" || id === "blockrun/auto") return "ClawRouter Auto (smart routing)";
   const norm = normSlug(id);
   const [prov, ...rest] = norm.split("/");
   let tail = rest.join("/") || prov;
@@ -126,7 +126,7 @@ async function main() {
     ...structuredClone(template),
     slug: id,
     display_name: prettyName(id),
-    description: `Routed through BlockRun / ClawRouter (${id})`,
+    description: `Routed through ClawRouter (${id})`,
     visibility: "list",
     priority: i,
     service_tiers: [],
