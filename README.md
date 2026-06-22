@@ -71,6 +71,22 @@ For Codex **Desktop**, the picker only renders custom models when the provider h
 `requires_openai_auth = true` (the bridge ignores the forwarded ChatGPT token and
 still pays via the wallet).
 
+## Web search (a switch)
+
+Codex's built-in `web_search` is a *hosted* tool that only OpenAI's backend runs,
+so it's silently dropped when routing through a custom provider. Instead the bridge
+runs web search **itself** (BlockRun Exa, paid from your wallet): when a request
+carries `x-web-search: 1`, the bridge offers a `web_search` tool, and when the model
+calls it the bridge executes the Exa search, feeds the results back, and re-asks —
+all invisibly to Codex. Works for every model.
+
+```bash
+npm run websearch on       # add x-web-search header to the clawrouter provider
+npm run websearch off
+npm run websearch status
+# restart Codex to apply
+```
+
 ## Configuration
 
 | Env var | Default | Effect |

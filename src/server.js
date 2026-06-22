@@ -27,6 +27,52 @@ function writeSSE(res, sse) {
   res.write(sse);
 }
 
+// Web search the bridge executes INLINE (like a hosted tool), so it never reaches
+// Codex's tool router. Enabled per-request via the `x-web-search` header (set by
+// scripts/websearch-toggle.mjs) or the WEB_SEARCH=1 env. Backed by BlockRun Exa.
+const WEB_SEARCH_TOOL = {
+  type: "function",
+  function: {
+    name: "web_search",
+    description:
+      "Search the live web (BlockRun Exa neural search). Returns ranked results " +
+      "with titles, URLs, dates and snippets. Use for current events, latest docs, " +
+      "versions, or anything past your training cutoff.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Natural-language search query" },
+        numResults: { type: "number", description: "Max results (default 6)" },
+      },
+      required: ["query"],
+    },
+  },
+};
+
+async function runExaSearch(upstream, args, fetchImpl) {
+  const body = { query: String(args.query ?? ""), numResults: Math.min(Number(args.numResults ?? 6), 15) };
+  const r = await fetchImpl(`${upstream}/exa/search`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const t = await r.text();
+  if (!r.ok) return `web_search failed (${r.status}): ${t.slice(0, 200)}`;
+  let j;
+  try { j = JSON.parse(t); } catch { return `web_search returned non-JSON`; }
+  const p = j.results ? j : j.data ?? j;
+  const hits = Array.isArray(p.results) ? p.results : [];
+  if (!hits.length) return `No web results for "${body.query}".`;
+  return hits
+    .slice(0, body.numResults)
+    .map((h) => {
+      const date = h.publishedDate ? ` (${String(h.publishedDate).slice(0, 10)})` : "";
+      const snip = (h.text ?? h.snippet ?? "").toString().replace(/\s+/g, " ").trim().slice(0, 300);
+      return `• ${h.title ?? "(untitled)"}${date}\n  ${h.url ?? ""}${snip ? `\n  ${snip}` : ""}`;
+    })
+    .join("\n");
+}
+
 /** Emit a Responses `response.failed` event so Codex surfaces a real error. */
 function failEvent(message) {
   return eventsToSSE([
@@ -77,33 +123,59 @@ export async function handleResponses(req, res, { upstream, fetchImpl = fetch })
     if (typeof v === "string") headers[k] = v;
   }
 
-  let upstreamResp;
-  try {
-    upstreamResp = await fetchImpl(`${upstream}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(chatBody),
-    });
-  } catch (err) {
-    writeSSE(res, failEvent(`cannot reach ClawRouter proxy at ${upstream}: ${err.message}`));
-    res.end();
-    return;
+  // Enable inline web search for this turn.
+  const webSearch = process.env.WEB_SEARCH === "1" || req.headers["x-web-search"] === "1";
+  if (webSearch) {
+    chatBody.tools = [...(chatBody.tools ?? []), WEB_SEARCH_TOOL];
+    if (chatBody.tool_choice === undefined) chatBody.tool_choice = "auto";
   }
 
-  const textBody = await upstreamResp.text();
-  if (!upstreamResp.ok) {
-    writeSSE(res, failEvent(`upstream ${upstreamResp.status}: ${textBody.slice(0, 500)}`));
-    res.end();
-    return;
-  }
-
+  // Loop: call upstream; if the model asks ONLY for web_search, run it via Exa,
+  // feed the results back, and re-ask — until it answers or calls a Codex tool.
   let chatJson;
-  try {
-    chatJson = JSON.parse(textBody);
-  } catch (err) {
-    writeSSE(res, failEvent(`upstream returned non-JSON: ${err.message}`));
-    res.end();
-    return;
+  for (let iter = 0; iter < 4; iter++) {
+    let upstreamResp;
+    try {
+      upstreamResp = await fetchImpl(`${upstream}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(chatBody),
+      });
+    } catch (err) {
+      writeSSE(res, failEvent(`cannot reach ClawRouter proxy at ${upstream}: ${err.message}`));
+      res.end();
+      return;
+    }
+    const textBody = await upstreamResp.text();
+    if (!upstreamResp.ok) {
+      writeSSE(res, failEvent(`upstream ${upstreamResp.status}: ${textBody.slice(0, 500)}`));
+      res.end();
+      return;
+    }
+    try {
+      chatJson = JSON.parse(textBody);
+    } catch (err) {
+      writeSSE(res, failEvent(`upstream returned non-JSON: ${err.message}`));
+      res.end();
+      return;
+    }
+
+    if (!webSearch) break;
+    const msg = chatJson.choices?.[0]?.message ?? {};
+    const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+    const ws = calls.filter((c) => c.function?.name === "web_search");
+    const others = calls.filter((c) => c.function?.name !== "web_search");
+    // Only resolve inline when the model asked for web_search and nothing else;
+    // mixed/other tool calls (shell, apply_patch…) belong to Codex.
+    if (ws.length === 0 || others.length > 0) break;
+
+    chatBody.messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: calls });
+    for (const c of ws) {
+      let args = {};
+      try { args = JSON.parse(c.function.arguments || "{}"); } catch {}
+      const result = await runExaSearch(upstream, args, fetchImpl).catch((e) => `web_search error: ${e.message}`);
+      chatBody.messages.push({ role: "tool", tool_call_id: c.id, content: result });
+    }
   }
 
   const allowedTools = Array.isArray(parsed.tools)

@@ -15,6 +15,7 @@
     "start": "node scripts/start.mjs",
     "bridge": "node src/server.js",
     "gen-catalog": "node src/gen-catalog.mjs",
+    "websearch": "node scripts/websearch-toggle.mjs",
     "install-daemon": "node scripts/install-daemon.mjs",
     "uninstall-daemon": "node scripts/install-daemon.mjs uninstall",
     "test": "node --test"
