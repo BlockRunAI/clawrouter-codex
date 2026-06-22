@@ -37,19 +37,47 @@ const FAMILY_LABEL = {
   nvidia: "NVIDIA", xai: "xAI", minimax: "MiniMax", zai: "", free: "",
 };
 
+// Normalize a dashed version to a dotted one so "claude-opus-4-7" and
+// "claude-opus-4.7" collapse to one canonical slug (and one clean name).
+function normSlug(id) {
+  return id.replace(/(\d)-(\d)/g, "$1.$2");
+}
+
+const WORD_CASE = {
+  gpt: "GPT", glm: "GLM", deepseek: "DeepSeek", minimax: "MiniMax", kimi: "Kimi",
+  qwen: "Qwen", nemotron: "Nemotron", mistral: "Mistral", llama: "Llama", grok: "Grok",
+  gemini: "Gemini", claude: "Claude", devstral: "Devstral", oss: "OSS", omni: "Omni",
+};
+
 function prettyName(id) {
   if (id === "auto" || id === "blockrun/auto") return "BlockRun Auto (smart routing)";
-  const [prov, ...rest] = id.split("/");
-  const tail = rest.join("/") || prov;
-  const titled = tail
-    .replace(/[-_]/g, " ")
-    .replace(/\bgpt\b/gi, "GPT")
-    .replace(/\bglm\b/gi, "GLM")
-    .replace(/\bv(\d)/gi, "V$1")
-    .replace(/\bk(\d)/gi, "K$1")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-  const label = FAMILY_LABEL[prov];
-  return label ? `${titled} · ${label}` : titled;
+  const norm = normSlug(id);
+  const [prov, ...rest] = norm.split("/");
+  let tail = rest.join("/") || prov;
+  let titled = tail
+    .replace(/[-_]/g, " ") // keep the version DOT; only dashes/underscores become spaces
+    .split(" ")
+    .map((w) => WORD_CASE[w.toLowerCase()] ?? (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+  // The free tier and NVIDIA-hosted catalog mirror canonical models — tag the
+  // source so they're distinguishable from the first-party entry.
+  if (prov === "free") titled += " (free)";
+  else if (prov === "nvidia") titled += " (NVIDIA)";
+  return titled;
+}
+
+/** Parse a slug into {family, line, version} for de-duping + latest-N selection. */
+function parseModel(id) {
+  const norm = normSlug(id);
+  const family = norm.split("/")[0];
+  const tail = norm.split("/").slice(1).join("/") || norm;
+  // version = the last dotted/whole number in the tail (4.7, 5.5, 2.5, 3.1, 120)
+  const vmatch = tail.match(/(\d+(?:\.\d+)?)(?!.*\d)/);
+  const version = vmatch ? parseFloat(vmatch[1]) : 0;
+  // line = the tail with its trailing version token stripped (groups versions of
+  // the same model series together, e.g. claude-opus-4.7 / -4.6 → "claude-opus")
+  const line = tail.replace(/[-.]?\d+(?:\.\d+)?(?:-?[a-z]+\d*)?$/i, "").replace(/[-.]$/, "") || tail;
+  return { slug: norm, family, line: `${family}/${line}`, version };
 }
 
 async function main() {
@@ -59,22 +87,41 @@ async function main() {
   if (!res.ok) throw new Error(`GET ${proxy}/models failed: ${res.status}`);
   const list = await res.json();
   const all = (Array.isArray(list?.data) ? list.data : []).map((m) => m.id).filter(Boolean);
+  const perFamily = Number(arg("--per-family", process.env.PER_FAMILY ?? "3"));
 
-  // Canonical "provider/model" slugs + the kept routing profile; drop bare
-  // aliases, routing dups, and media-generation models.
-  const ids = all.filter(
-    (id) => (id.includes("/") || KEEP_ALIASES.has(id)) && !MEDIA.test(id),
+  // Canonical "provider/model" slugs; drop bare aliases (no digit in the tail,
+  // e.g. anthropic/claude, openai/gpt) and media-gen models.
+  const canonical = all.filter(
+    (id) => id.includes("/") && /\d/.test(id.split("/").slice(1).join("/")) && !MEDIA.test(id),
   );
-  // blockrun/auto first, then group by family for a tidy picker.
-  ids.sort((a, b) => {
-    const ax = KEEP_ALIASES.has(a) ? 0 : 1, bx = KEEP_ALIASES.has(b) ? 0 : 1;
-    return ax - bx || a.localeCompare(b);
-  });
+
+  // Collapse each model SERIES to its latest version (dedups dashed/dotted dups
+  // and old minor versions), then keep the latest `perFamily` distinct series
+  // per provider so the picker stays small and diverse.
+  const byLine = new Map();
+  for (const id of canonical) {
+    const m = parseModel(id);
+    const prev = byLine.get(m.line);
+    if (!prev || m.version > prev.version) byLine.set(m.line, m);
+  }
+  const byFamily = new Map();
+  for (const m of byLine.values()) {
+    if (!byFamily.has(m.family)) byFamily.set(m.family, []);
+    byFamily.get(m.family).push(m);
+  }
+  const picked = [];
+  for (const arr of byFamily.values()) {
+    arr.sort((a, b) => b.version - a.version);
+    picked.push(...arr.slice(0, perFamily));
+  }
+  picked.sort((a, b) => a.family.localeCompare(b.family) || b.version - a.version);
+
+  const ids = ["blockrun/auto", ...picked.map((m) => m.slug)];
   if (ids.length === 0) throw new Error(`no usable models from ${proxy}/models`);
 
   const models = ids.map((id, i) => ({
     ...structuredClone(template),
-    slug: id === "auto" ? "blockrun/auto" : id,
+    slug: id,
     display_name: prettyName(id),
     description: `Routed through BlockRun / ClawRouter (${id})`,
     visibility: "list",

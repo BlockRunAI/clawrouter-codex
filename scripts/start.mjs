@@ -46,13 +46,26 @@ async function waitHealthy(port, label, tries = 40) {
   return false;
 }
 
-function resolveWalletKey() {
-  if (process.env.BLOCKRUN_WALLET_KEY) return process.env.BLOCKRUN_WALLET_KEY.trim();
+// Canonical local BlockRun wallet (same file Franklin reads). Lives OUTSIDE
+// ~/.openclaw, so when we use it we also isolate HOME so ClawRouter's saved
+// ~/.openclaw wallet can't shadow it.
+const BLOCKRUN_WALLET = join(homedir(), ".blockrun", ".session");
+
+function rd(p) { return readFileSync(p.replace(/^~/, homedir()), "utf8").trim(); }
+
+function resolveWallet() {
+  if (process.env.BLOCKRUN_WALLET_KEY) {
+    return { key: process.env.BLOCKRUN_WALLET_KEY.trim(), isolate: ISOLATE_HOME };
+  }
   const f = process.env.WALLET_KEY_FILE;
   if (f && existsSync(f.replace(/^~/, homedir()))) {
-    return readFileSync(f.replace(/^~/, homedir()), "utf8").trim();
+    return { key: rd(f), isolate: ISOLATE_HOME };
   }
-  return undefined; // let ClawRouter discover/generate its own wallet
+  // Auto-detect the local BlockRun wallet — no config needed.
+  if (existsSync(BLOCKRUN_WALLET)) {
+    return { key: rd(BLOCKRUN_WALLET), isolate: true, auto: true };
+  }
+  return { key: undefined, isolate: ISOLATE_HOME }; // ClawRouter discovers/generates
 }
 
 const children = [];
@@ -79,10 +92,11 @@ async function main() {
   if (await healthy(PROXY_PORT)) {
     log(`proxy already up on :${PROXY_PORT}`);
   } else {
-    const key = resolveWalletKey();
+    const { key, isolate, auto } = resolveWallet();
+    if (auto) log(`auto-detected BlockRun wallet at ${BLOCKRUN_WALLET}`);
     const env = {};
     if (key) env.BLOCKRUN_WALLET_KEY = key;
-    if (ISOLATE_HOME) {
+    if (isolate) {
       const h = join(STATE, "proxy-home");
       if (!existsSync(h)) mkdirSync(h, { recursive: true });
       env.HOME = h; // a saved ~/.openclaw wallet won't shadow the provided key
