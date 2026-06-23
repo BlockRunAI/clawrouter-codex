@@ -100,7 +100,7 @@ npm run websearch status
 | `PORT` | `8403` | Port the bridge listens on |
 | `PROXY_PORT` | `8404` | Port `npm start` launches the ClawRouter proxy on |
 | `CLAWROUTER_PROXY_URL` | `http://127.0.0.1:8404/v1` | Upstream the bridge forwards to |
-| `CLAWROUTER_CMD` | `npx -y @blockrun/clawrouter` | Command `npm start` uses to launch the proxy |
+| `CLAWROUTER_CMD` | `npx -y @blockrun/clawrouter@latest` | Command `npm start` uses to launch the proxy |
 | `WALLET_KEY_FILE` | — | Read the x402 wallet key from this file |
 | `ISOLATE_HOME` | — | `1` = run the proxy under a fresh HOME so a saved wallet can't shadow the key |
 

@@ -25,7 +25,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PORT = Number(process.env.PORT ?? 8403);
 const PROXY_PORT = Number(process.env.PROXY_PORT ?? 8404);
-const CLAWROUTER_CMD = process.env.CLAWROUTER_CMD ?? "npx -y @blockrun/clawrouter";
+// @latest so the proxy's built-in model registry stays current (it ships the
+// model list per version — a stale ClawRouter is missing the newest models).
+const CLAWROUTER_CMD = process.env.CLAWROUTER_CMD ?? "npx -y @blockrun/clawrouter@latest";
 const ISOLATE_HOME = process.env.ISOLATE_HOME === "1";
 const STATE = join(homedir(), ".clawrouter-codex");
 
