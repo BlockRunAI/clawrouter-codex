@@ -1,110 +1,141 @@
-// dashboard — a small loopback web panel for the Codex↔ClawRouter link: wallet
-// balance, spend/usage (from the proxy's /stats), and the master switches
-// (web search, desktop ClawRouter mode). Served by the bridge at /dashboard.
-// Bind loopback only — it reads wallet state and flips config.
+// dashboard — a loopback web panel for the Codex↔ClawRouter link: the master
+// provider switch (ChatGPT subscription ⇄ ClawRouter), wallet balance, spend/
+// usage, top models, and the web-search switch. Served by the bridge at
+// /dashboard. Loopback only — it reads wallet state and edits Codex config.
 
-import { readFileSync, existsSync, writeFileSync, copyFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const SCRIPTS = join(dirname(dirname(fileURLToPath(import.meta.url))), "scripts");
 const BASE = join(homedir(), ".codex", "config.toml");
 const PROFILE = join(homedir(), ".codex", "clawrouter.config.toml");
-const WS_HEADER_RE = /^\s*http_headers\s*=\s*\{[^}]*x-web-search[^}]*\}\s*$/;
+const WS_HEADER_RE = /x-web-search/;
 
-function read(f) { return existsSync(f) ? readFileSync(f, "utf8") : ""; }
+const read = (f) => (existsSync(f) ? readFileSync(f, "utf8") : "");
 
-/** Current state of the master switches, read from the Codex config files. */
+/** Current switch state, read from the Codex config files. */
 export function toggleStates() {
-  const webSearch = [BASE, PROFILE].some((f) => read(f).split("\n").some((l) => WS_HEADER_RE.test(l)));
-  // Desktop mode = base config routes globally through clawrouter.
-  const desktop = read(BASE).split("\n").some((l) => /^\s*model_provider\s*=\s*"clawrouter"/.test(l));
-  return { webSearch, desktop };
+  const webSearch = WS_HEADER_RE.test(read(BASE)) || WS_HEADER_RE.test(read(PROFILE));
+  // "desktop" = base config routes the default through ClawRouter (vs native).
+  const clawrouter = read(BASE).split("\n").some((l) => /^\s*model_provider\s*=\s*"clawrouter"/.test(l));
+  return { webSearch, clawrouter };
 }
 
-/** Flip the web-search header on the clawrouter provider in both config files. */
-export function setWebSearch(on) {
-  const HEADER = `http_headers = { "x-web-search" = "1" }`;
-  const PROV = /^\s*\[model_providers\.clawrouter\]\s*$/;
-  for (const f of [BASE, PROFILE]) {
-    if (!existsSync(f)) continue;
-    const lines = read(f).split("\n").filter((l) => !WS_HEADER_RE.test(l));
-    if (!lines.some((l) => PROV.test(l))) continue;
-    copyFileSync(f, `${f}.bak-dash`);
-    const out = [];
-    for (const l of lines) { out.push(l); if (on && PROV.test(l)) out.push(HEADER); }
-    writeFileSync(f, out.join("\n"));
-  }
+/** Flip a switch by delegating to the (tested) toggle scripts. */
+export function applyToggle(name, on) {
+  const script = { websearch: "websearch-toggle.mjs", desktop: "desktop-toggle.mjs" }[name];
+  if (!script) throw new Error(`unknown toggle: ${name}`);
+  execFileSync(process.execPath, [join(SCRIPTS, script), on ? "on" : "off"], { stdio: "ignore" });
+  return toggleStates();
 }
 
 /** Aggregate wallet + spend + switches for the dashboard JSON. */
 export async function getData(upstream, fetchImpl = fetch) {
+  const root = upstream.replace(/\/v1$/, "");
   const out = { wallet: null, stats: null, toggles: toggleStates(), upstream, error: null };
-  try {
-    const h = await fetchImpl(`${upstream.replace(/\/v1$/, "")}/health?full=true`, { signal: AbortSignal.timeout(8000) });
-    out.wallet = await h.json();
-  } catch (e) { out.error = `wallet: ${e.message}`; }
-  try {
-    const s = await fetchImpl(`${upstream.replace(/\/v1$/, "")}/stats?days=7`, { signal: AbortSignal.timeout(8000) });
-    out.stats = await s.json();
-  } catch (e) { out.error = (out.error ? out.error + "; " : "") + `stats: ${e.message}`; }
+  try { out.wallet = await (await fetchImpl(`${root}/health?full=true`, { signal: AbortSignal.timeout(8000) })).json(); }
+  catch (e) { out.error = `wallet: ${e.message}`; }
+  try { out.stats = await (await fetchImpl(`${root}/stats?days=7`, { signal: AbortSignal.timeout(8000) })).json(); }
+  catch (e) { out.error = (out.error ? out.error + "; " : "") + `stats: ${e.message}`; }
   return out;
 }
 
-export const HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ClawRouter · Codex</title><style>
-:root{--bg:#0b0d10;--card:#15181d;--line:#262b33;--fg:#e7ecf2;--dim:#8b95a3;--accent:#5b8cff;--good:#3fb950;--warn:#d29922}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.wrap{max-width:860px;margin:0 auto;padding:28px 20px}
-h1{font-size:18px;margin:0 0 2px}.sub{color:var(--dim);font-size:12px;margin-bottom:20px}
+export const HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>ClawRouter · Codex</title>
+<style>
+:root{
+  --bg:#0a0c10;--bg2:#0e1116;--card:#13171e;--card2:#171c25;--line:#232a34;--line2:#2c343f;
+  --fg:#eef2f7;--dim:#8b96a5;--dim2:#6b7585;--accent:#6ea8fe;--accent2:#4d7cfe;
+  --good:#46c46a;--warn:#e3a008;--bad:#f0626e;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:radial-gradient(1200px 600px at 50% -200px,#16202f 0%,var(--bg) 60%);
+  color:var(--fg);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+.wrap{max-width:880px;margin:0 auto;padding:34px 22px 60px}
+header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#9b6dff);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#0a0c10}
+h1{font-size:17px;font-weight:650;margin:0;letter-spacing:.2px}
+.sub{color:var(--dim2);font-size:11.5px;margin:2px 0 22px;font-family:var(--mono)}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:18px;gap:5px}
+.seg button{flex:1;border:0;background:transparent;color:var(--dim);font:inherit;font-weight:650;
+  padding:13px 10px;border-radius:10px;cursor:pointer;transition:.15s;display:flex;flex-direction:column;align-items:center;gap:2px}
+.seg button .s{font-size:11px;font-weight:500;color:var(--dim2)}
+.seg button:hover{color:var(--fg)}
+.seg button.active{background:linear-gradient(135deg,var(--accent2),#6b59ff);color:#fff;box-shadow:0 4px 14px rgba(77,124,254,.35)}
+.seg button.active .s{color:rgba(255,255,255,.85)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-.card h2{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:0 0 10px;font-weight:600}
-.big{font-size:26px;font-weight:650}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
-.row .k{color:var(--dim)}.muted{color:var(--dim);font-size:12px}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
-.ok{background:rgba(63,185,80,.15);color:var(--good)}.bad{background:rgba(210,153,34,.15);color:var(--warn)}
-.sw{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}.sw:last-child{border:0}
-button.t{border:1px solid var(--line);background:#1c2128;color:var(--fg);border-radius:999px;padding:5px 14px;cursor:pointer;font-weight:600}
-button.t.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.full{grid-column:1/-1}.err{color:var(--warn);font-size:12px;margin-top:8px}
-table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid var(--line)}td:last-child{text-align:right}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim2);margin:0 0 12px;font-weight:600}
+.bal{font-size:32px;font-weight:700;letter-spacing:-.5px;line-height:1}
+.addr{color:var(--dim);font-family:var(--mono);font-size:11.5px;margin-top:9px;word-break:break-all}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.row .k{color:var(--dim)}.row .v{font-weight:600}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.02em}
+.ok{background:rgba(70,196,106,.14);color:var(--good)}.bad{background:rgba(240,98,110,.14);color:var(--bad)}
+.full{grid-column:1/-1}
+.sw{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line)}.sw:last-child{border:0}
+.sw b{font-weight:650}.sw .d{color:var(--dim2);font-size:12px;margin-top:1px}
+.toggle{width:48px;height:28px;border-radius:999px;border:1px solid var(--line2);background:#0c0f14;position:relative;cursor:pointer;transition:.18s;flex:none}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--dim);transition:.18s}
+.toggle.on{background:linear-gradient(135deg,var(--accent2),#6b59ff);border-color:transparent}.toggle.on::after{left:23px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px}td{padding:7px 0;border-bottom:1px solid var(--line)}tr:last-child td{border:0}td:last-child{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+.note{color:var(--accent);font-size:12px;margin-top:14px;min-height:16px;transition:.2s}
+.err{color:var(--warn);font-size:12px;margin-top:8px}
+.spark{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent),#9b6dff);margin-top:10px;opacity:.6}
 </style></head><body><div class="wrap">
-<h1>ClawRouter · Codex</h1><div class="sub" id="sub">loading…</div>
+<header><div class="logo">C</div><h1>ClawRouter · Codex</h1></header>
+<div class="sub" id="sub">loading…</div>
+
+<div class="seg" id="seg">
+  <button id="seg-sub" onclick="setProvider(false)"><span>ChatGPT Subscription</span><span class="s">native GPT · your plan</span></button>
+  <button id="seg-claw" onclick="setProvider(true)"><span>ClawRouter</span><span class="s">55+ models · wallet</span></button>
+</div>
+
 <div class="grid">
-  <div class="card"><h2>Wallet</h2><div class="big" id="bal">—</div><div class="muted mono" id="addr">—</div><div id="chain" style="margin-top:8px"></div></div>
+  <div class="card"><h2>Wallet</h2><div class="bal" id="bal">—</div><div class="spark"></div>
+    <div class="addr" id="addr">—</div><div id="chain" style="margin-top:10px"></div></div>
   <div class="card"><h2>Spend · last 7 days</h2>
-    <div class="row"><span class="k">Requests</span><span id="reqs">—</span></div>
-    <div class="row"><span class="k">Cost</span><span id="cost">—</span></div>
-    <div class="row"><span class="k">Saved vs baseline</span><span id="saved">—</span></div>
-    <div class="row"><span class="k">Avg latency</span><span id="lat">—</span></div>
+    <div class="row"><span class="k">Requests</span><span class="v" id="reqs">—</span></div>
+    <div class="row"><span class="k">Cost</span><span class="v" id="cost">—</span></div>
+    <div class="row"><span class="k">Saved vs baseline</span><span class="v" id="saved">—</span></div>
+    <div class="row"><span class="k">Avg latency</span><span class="v" id="lat">—</span></div>
   </div>
   <div class="card full"><h2>Switches</h2>
-    <div class="sw"><div><b>Web search</b><div class="muted">Bridge runs BlockRun Exa inline · wallet-paid</div></div><button class="t" id="sw-web" onclick="flip('websearch')">—</button></div>
-    <div class="sw"><div><b>Desktop → ClawRouter</b><div class="muted">Base config routes Codex Desktop through ClawRouter</div></div><span class="pill" id="sw-desk">—</span></div>
+    <div class="sw"><div><b>Web search</b><div class="d">Bridge runs BlockRun Exa inline · wallet-paid</div></div>
+      <div class="toggle" id="sw-web" onclick="flip('websearch')"></div></div>
   </div>
   <div class="card full"><h2>Top models · 7 days</h2><table id="models"><tbody></tbody></table></div>
 </div>
-<div class="err" id="err"></div></div>
+<div class="note" id="note"></div><div class="err" id="err"></div></div>
 <script>
+let busy=false;
 async function load(){
   const d=await (await fetch('/dashboard/api')).json();
-  const w=d.wallet||{},s=d.stats||{};
-  document.getElementById('sub').textContent='proxy '+(d.upstream||'')+' · '+new Date().toLocaleString();
+  const w=d.wallet||{},s=d.stats||{},t=d.toggles||{};
+  document.getElementById('sub').textContent='proxy '+(d.upstream||'')+' · '+new Date().toLocaleTimeString();
   document.getElementById('bal').textContent=w.balance||'—';
   document.getElementById('addr').textContent=w.wallet||'—';
-  document.getElementById('chain').innerHTML=(w.paymentChain?'<span class="pill ok">'+w.paymentChain+'</span>':'')+(w.isEmpty?' <span class="pill bad">empty</span>':'');
+  document.getElementById('chain').innerHTML=(w.paymentChain?'<span class="pill ok">'+w.paymentChain.toUpperCase()+'</span> ':'')+(w.isEmpty?'<span class="pill bad">EMPTY</span>':'');
   document.getElementById('reqs').textContent=s.totalRequests??'—';
-  document.getElementById('cost').textContent=(s.totalCost!=null?'$'+Number(s.totalCost).toFixed(4):'—');
-  document.getElementById('saved').textContent=(s.savingsPercentage!=null?s.savingsPercentage+'%':'—');
-  document.getElementById('lat').textContent=(s.avgLatencyMs!=null?Math.round(s.avgLatencyMs)+' ms':'—');
-  const web=document.getElementById('sw-web');web.textContent=d.toggles.webSearch?'ON':'OFF';web.className='t'+(d.toggles.webSearch?' on':'');
-  document.getElementById('sw-desk').textContent=d.toggles.desktop?'ON':'OFF';document.getElementById('sw-desk').className='pill '+(d.toggles.desktop?'ok':'bad');
+  document.getElementById('cost').textContent=s.totalCost!=null?'$'+Number(s.totalCost).toFixed(4):'—';
+  document.getElementById('saved').textContent=s.savingsPercentage!=null?Number(s.savingsPercentage).toFixed(0)+'%':'—';
+  document.getElementById('lat').textContent=s.avgLatencyMs!=null?Math.round(s.avgLatencyMs)+' ms':'—';
+  document.getElementById('seg-sub').classList.toggle('active',!t.clawrouter);
+  document.getElementById('seg-claw').classList.toggle('active',!!t.clawrouter);
+  document.getElementById('sw-web').classList.toggle('on',!!t.webSearch);
   const tb=document.querySelector('#models tbody');tb.innerHTML='';
-  const bm=s.byModel||{};Object.entries(bm).sort((a,b)=>(b[1].requests||b[1].count||0)-(a[1].requests||a[1].count||0)).slice(0,8)
-    .forEach(([m,v])=>{const tr=document.createElement('tr');tr.innerHTML='<td class="mono">'+m+'</td><td>'+(v.requests||v.count||0)+' req</td>';tb.appendChild(tr);});
+  Object.entries(s.byModel||{}).map(([m,v])=>[m,v.requests||v.count||0]).sort((a,b)=>b[1]-a[1]).slice(0,8)
+    .forEach(([m,n])=>{const tr=document.createElement('tr');tr.innerHTML='<td style="font-family:var(--mono);font-size:12px">'+m+'</td><td>'+n+' req</td>';tb.appendChild(tr);});
+  if(!Object.keys(s.byModel||{}).length)tb.innerHTML='<tr><td style="color:var(--dim2)">no usage yet</td><td></td></tr>';
   document.getElementById('err').textContent=d.error?('⚠ '+d.error):'';
 }
-async function flip(name){await fetch('/dashboard/api/toggle?name='+name,{method:'POST'});await load();}
-load();setInterval(load,15000);
+async function post(url){busy=true;try{await fetch(url,{method:'POST'});note('Saved — restart Codex (Cmd+Q) to apply.');}finally{busy=false;await load();}}
+function note(m){const n=document.getElementById('note');n.textContent=m;clearTimeout(n._t);n._t=setTimeout(()=>n.textContent='',6000);}
+async function setProvider(claw){if(busy)return;await post('/dashboard/api/toggle?name=desktop&on='+(claw?1:0));}
+async function flip(name){if(busy)return;const cur=document.getElementById('sw-web').classList.contains('on');await post('/dashboard/api/toggle?name='+name+'&on='+(cur?0:1));}
+load();setInterval(()=>{if(!busy)load();},15000);
 </script></body></html>`;

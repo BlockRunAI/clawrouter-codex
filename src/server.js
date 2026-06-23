@@ -273,11 +273,11 @@ export function createBridge({ upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } 
       return;
     }
     if (req.method === "POST" && req.url?.startsWith("/dashboard/api/toggle")) {
-      const name = new URL(req.url, "http://localhost").searchParams.get("name");
+      const params = new URL(req.url, "http://localhost").searchParams;
       try {
-        if (name === "websearch") Dashboard.setWebSearch(!Dashboard.toggleStates().webSearch);
+        const toggles = Dashboard.applyToggle(params.get("name"), params.get("on") === "1");
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: true, toggles: Dashboard.toggleStates() }));
+        res.end(JSON.stringify({ ok: true, toggles }));
       } catch (e) {
         res.writeHead(500, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
