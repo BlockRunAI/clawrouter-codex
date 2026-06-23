@@ -5,10 +5,8 @@
 
 import { readFileSync, existsSync, writeFileSync, copyFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASE = join(homedir(), ".codex", "config.toml");
 const PROFILE = join(homedir(), ".codex", "clawrouter.config.toml");
 const WS_HEADER_RE = /^\s*http_headers\s*=\s*\{[^}]*x-web-search[^}]*\}\s*$/;

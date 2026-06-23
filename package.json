@@ -13,6 +13,8 @@
   },
   "scripts": {
     "start": "node scripts/start.mjs",
+    "setup": "node scripts/setup.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "bridge": "node src/server.js",
     "gen-catalog": "node src/gen-catalog.mjs",
     "websearch": "node scripts/websearch-toggle.mjs",

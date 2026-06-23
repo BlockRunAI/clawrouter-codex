@@ -13,41 +13,35 @@ The bridge holds **no wallet and signs no payments**. Smart routing, x402 microp
 ## Quick start
 
 ```bash
-# 1. Start the ClawRouter proxy (holds your wallet, pays via x402)
-npx @blockrun/clawrouter        # listens on :8402
+git clone https://github.com/BlockRunAI/clawrouter-codex && cd clawrouter-codex
 
-# 2. Start the bridge
-npx @blockrun/clawrouter-codex  # listens on :8403, forwards to :8402
+npm start          # 1. bring up the link: ClawRouter proxy (:8404) + bridge (:8403)
+npm run setup      # 2. generate the model catalog + write the `clawrouter` profile
+npm run doctor     # 3. verify everything is wired
 
-# 3. Point Codex at the bridge — ~/.codex/config.toml
+codex --profile clawrouter            # use ClawRouter models in the Codex CLI
 ```
 
-```toml
-model = "blockrun/auto"
-model_provider = "clawrouter"
+`npm start` auto-discovers a local BlockRun wallet (`~/.blockrun/.session`) and
+supervises both processes (restarts on exit). `npm run setup` writes a **profile**
+(`~/.codex/clawrouter.config.toml`) so your base config — and your ChatGPT
+subscription default — is left untouched; plain `codex` still uses it.
 
-[model_providers.clawrouter]
-name = "ClawRouter"
-base_url = "http://localhost:8403/v1"
-wire_api = "responses"
-# no env_key needed — the wallet signature is the auth
-```
-
-## Run it as one always-on link
-
-`npm start` brings up **both** the ClawRouter proxy and the bridge, health-checks
-them, and supervises (restarts on exit). Safe to run repeatedly.
+### Desktop & web search (switches)
 
 ```bash
-npm start                 # proxy (:8404) + bridge (:8403), uses your discovered wallet
+npm run desktop on      # show ClawRouter models in the Codex Desktop picker
+npm run websearch on    # enable live web search (BlockRun Exa, wallet-paid)
+# restart Codex (Cmd+Q) after toggling
 ```
 
-To pay from a specific funded wallet that lives **outside** `~/.openclaw` (e.g. a
-local `~/.blockrun` wallet), point at its key file and isolate HOME so a saved
-`~/.openclaw` wallet can't shadow it:
+### Use a specific wallet
+
+`npm start` finds `~/.blockrun/.session` automatically. To force another funded
+key that lives outside `~/.openclaw`:
 
 ```bash
-WALLET_KEY_FILE=~/.blockrun/.session ISOLATE_HOME=1 npm start
+WALLET_KEY_FILE=~/path/to/key ISOLATE_HOME=1 npm start
 ```
 
 ### Keep it up across reboots (optional, macOS)

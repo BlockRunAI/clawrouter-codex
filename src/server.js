@@ -179,6 +179,15 @@ export async function handleResponses(req, res, { upstream, fetchImpl = fetch })
     }
   }
 
+  // Drop any unresolved web_search calls (loop cap hit, or mixed with a Codex
+  // tool) — Codex has no executor for the bridge's inline tool, so leaking it as
+  // a function_call would surface "unsupported call".
+  const finalMsg = chatJson.choices?.[0]?.message;
+  if (webSearch && Array.isArray(finalMsg?.tool_calls)) {
+    finalMsg.tool_calls = finalMsg.tool_calls.filter((c) => c.function?.name !== "web_search");
+    if (finalMsg.tool_calls.length === 0) delete finalMsg.tool_calls;
+  }
+
   const allowedTools = Array.isArray(parsed.tools)
     ? parsed.tools.map((t) => t?.name ?? t?.function?.name).filter(Boolean)
     : [];

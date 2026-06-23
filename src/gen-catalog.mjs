@@ -28,15 +28,6 @@ const out = arg("--out", join(homedir(), ".codex", "clawrouter-catalog.json")).r
 // Image/video generation families are useless to a coding agent — hide them.
 const MEDIA = /(?:^|[/_-])(?:image|video|dall-?e|imagen|sora|veo|flux|kling|seedance|hailuo|stable-diffusion|sdxl|midjourney|nano-banana)(?:[/_-]|$|\d)/i;
 
-// Keep the one canonical smart-routing profile; drop the other bare aliases
-// (sonnet/opus/gpt/kimi/…) and routing duplicates so the picker isn't cluttered.
-const KEEP_ALIASES = new Set(["auto", "blockrun/auto"]);
-
-const FAMILY_LABEL = {
-  openai: "", anthropic: "", google: "", deepseek: "DeepSeek", moonshot: "",
-  nvidia: "NVIDIA", xai: "xAI", minimax: "MiniMax", zai: "", free: "",
-};
-
 // Normalize a dashed version to a dotted one so "claude-opus-4-7" and
 // "claude-opus-4.7" collapse to one canonical slug (and one clean name).
 function normSlug(id) {
