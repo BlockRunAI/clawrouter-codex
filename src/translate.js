@@ -176,9 +176,10 @@ function nextId(prefix) {
 
 // ---------------------------------------------------------------------------
 // Tool-call scavenging — recover function calls that a model emits as raw JSON
-// inside text content instead of structured tool_calls. Ported from Franklin's
-// src/agent/repair/scavenge.ts (the canonical BlockRun handling). Gated on the
-// request's declared tool names so prose that merely mentions a tool is ignored.
+// inside text content instead of structured tool_calls. Handles the three common
+// shapes (flat {name,arguments}, OpenAI-nested {type,function}, and {tool_name,
+// tool_args}). Gated on the request's declared tool names so prose that merely
+// mentions a tool is ignored.
 // Example leak this catches: {"type":"function","name":"get_goal","parameters":{}}
 // ---------------------------------------------------------------------------
 

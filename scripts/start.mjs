@@ -48,7 +48,7 @@ async function waitHealthy(port, label, tries = 40) {
   return false;
 }
 
-// Canonical local BlockRun wallet (same file Franklin reads). Lives OUTSIDE
+// Canonical local BlockRun wallet (~/.blockrun/.session). Lives OUTSIDE
 // ~/.openclaw, so when we use it we also isolate HOME so ClawRouter's saved
 // ~/.openclaw wallet can't shadow it.
 const BLOCKRUN_WALLET = join(homedir(), ".blockrun", ".session");
