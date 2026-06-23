@@ -272,6 +272,29 @@ export function createBridge({ upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } 
         .catch((e) => { res.writeHead(500, { "content-type": "application/json" }); res.end(JSON.stringify({ error: e.message })); });
       return;
     }
+    if (req.method === "POST" && req.url === "/dashboard/api/regen") {
+      try {
+        const count = Dashboard.regenCatalog(upstream);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, count }));
+      } catch (e) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+    if (req.method === "POST" && req.url?.startsWith("/dashboard/api/setdefault")) {
+      const model = new URL(req.url, "http://localhost").searchParams.get("model");
+      try {
+        Dashboard.setDefaultModel(model);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true, model }));
+      } catch (e) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
     if (req.method === "POST" && req.url?.startsWith("/dashboard/api/toggle")) {
       const params = new URL(req.url, "http://localhost").searchParams;
       try {
