@@ -10,11 +10,26 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SCRIPTS = join(dirname(dirname(fileURLToPath(import.meta.url))), "scripts");
-const BASE = join(homedir(), ".codex", "config.toml");
-const PROFILE = join(homedir(), ".codex", "clawrouter.config.toml");
+const CODEX = join(homedir(), ".codex");
+const BASE = join(CODEX, "config.toml");
+const PROFILE = join(CODEX, "clawrouter.config.toml");
+const CATALOG = join(CODEX, "clawrouter-catalog.json");
 const WS_HEADER_RE = /x-web-search/;
 
 const read = (f) => (existsSync(f) ? readFileSync(f, "utf8") : "");
+
+/** The models currently in the Codex picker (the generated catalog). */
+export function catalogModels() {
+  try {
+    return (JSON.parse(read(CATALOG)).models || []).map((m) => ({
+      name: m.display_name,
+      slug: m.slug,
+      family: m.slug.includes("/") ? m.slug.split("/")[0] : "blockrun",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 /** Current switch state, read from the Codex config files. */
 export function toggleStates() {
@@ -35,7 +50,7 @@ export function applyToggle(name, on) {
 /** Aggregate wallet + spend + switches for the dashboard JSON. */
 export async function getData(upstream, fetchImpl = fetch) {
   const root = upstream.replace(/\/v1$/, "");
-  const out = { wallet: null, stats: null, toggles: toggleStates(), upstream, error: null };
+  const out = { wallet: null, stats: null, toggles: toggleStates(), catalog: catalogModels(), upstream, error: null };
   try { out.wallet = await (await fetchImpl(`${root}/health?full=true`, { signal: AbortSignal.timeout(8000) })).json(); }
   catch (e) { out.error = `wallet: ${e.message}`; }
   try { out.stats = await (await fetchImpl(`${root}/stats?days=7`, { signal: AbortSignal.timeout(8000) })).json(); }
@@ -86,6 +101,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}td{padding:7px 0;border
 .note{color:var(--accent);font-size:12px;margin-top:14px;min-height:16px;transition:.2s}
 .err{color:var(--warn);font-size:12px;margin-top:8px}
 .spark{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent),#9b6dff);margin-top:10px;opacity:.6}
+.fam{margin:12px 0 6px;font-size:10.5px;font-weight:700;color:var(--dim2);text-transform:uppercase;letter-spacing:.06em}
+.fam:first-child{margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:4px 11px;border-radius:999px;background:#0d1117;border:1px solid var(--line);color:var(--fg)}
+.chip.new{border-color:var(--accent2);color:var(--accent)}
 </style></head><body><div class="wrap">
 <header><div class="logo">C</div><h1>ClawRouter · Codex</h1></header>
 <div class="sub" id="sub">loading…</div>
@@ -109,6 +129,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td{padding:7px 0;border
       <div class="toggle" id="sw-web" onclick="flip('websearch')"></div></div>
   </div>
   <div class="card full"><h2>Top models · 7 days</h2><table id="models"><tbody></tbody></table></div>
+  <div class="card full"><h2>Models in your picker · <span id="mcount">—</span></h2><div id="picker"></div></div>
 </div>
 <div class="note" id="note"></div><div class="err" id="err"></div></div>
 <script>
@@ -131,6 +152,16 @@ async function load(){
   Object.entries(s.byModel||{}).map(([m,v])=>[m,v.requests||v.count||0]).sort((a,b)=>b[1]-a[1]).slice(0,8)
     .forEach(([m,n])=>{const tr=document.createElement('tr');tr.innerHTML='<td style="font-family:var(--mono);font-size:12px">'+m+'</td><td>'+n+' req</td>';tb.appendChild(tr);});
   if(!Object.keys(s.byModel||{}).length)tb.innerHTML='<tr><td style="color:var(--dim2)">no usage yet</td><td></td></tr>';
+  const cat=d.catalog||[];document.getElementById('mcount').textContent=cat.length+' models';
+  const fam={};cat.forEach(m=>{(fam[m.family]=fam[m.family]||[]).push(m.name);});
+  const pk=document.getElementById('picker');pk.innerHTML='';
+  if(!cat.length)pk.innerHTML='<div style="color:var(--dim2);font-size:12px">no catalog — run <span style="font-family:var(--mono)">npm run gen-catalog</span></div>';
+  Object.entries(fam).forEach(([f,names])=>{
+    const h=document.createElement('div');h.className='fam';h.textContent=f;pk.appendChild(h);
+    const c=document.createElement('div');c.className='chips';
+    names.forEach(n=>{const s=document.createElement('span');s.className='chip';s.textContent=n;c.appendChild(s);});
+    pk.appendChild(c);
+  });
   document.getElementById('err').textContent=d.error?('⚠ '+d.error):'';
 }
 async function post(url){busy=true;try{await fetch(url,{method:'POST'});note('Saved — restart Codex (Cmd+Q) to apply.');}finally{busy=false;await load();}}
