@@ -25,6 +25,13 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BlockRunAI/clawrouter-codex.git"
+  },
   "files": [
     "bin",
     "src",
