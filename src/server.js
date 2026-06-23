@@ -5,8 +5,8 @@
 //
 // The bridge holds NO wallet and signs NO payments: routing, x402 micropayments
 // and model fallback all stay in the canonical ClawRouter proxy. This process
-// only translates the Responses wire format ⇄ Chat Completions, exactly the way
-// the Hermes adapter forwards to a spawned `npx @blockrun/clawrouter` proxy.
+// only translates the Responses wire format ⇄ Chat Completions, forwarding to a
+// locally-spawned `npx @blockrun/clawrouter` proxy that holds the wallet.
 
 import { createServer } from "node:http";
 import { responsesToChat, chatToResponsesEvents, eventsToSSE } from "./translate.js";

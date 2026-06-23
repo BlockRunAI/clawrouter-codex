@@ -8,7 +8,7 @@ Codex only speaks the OpenAI **Responses API** (`/v1/responses`). ClawRouter spe
 Codex ──/v1/responses──▶ [clawrouter-codex] ──/v1/chat/completions──▶ ClawRouter ──x402──▶ BlockRun
 ```
 
-The bridge holds **no wallet and signs no payments**. Smart routing, x402 micropayments, and model fallback all stay in the canonical ClawRouter proxy — exactly like the Hermes adapter forwards to a spawned `npx @blockrun/clawrouter`. This process is pure wire-format translation, which keeps it a separate, independently-shippable package that never forks ClawRouter core.
+The bridge holds **no wallet and signs no payments**. Smart routing, x402 micropayments, and model fallback all stay in the ClawRouter proxy it forwards to (`npx @blockrun/clawrouter`). This process is pure wire-format translation, which keeps it a separate, independently-shippable package that never forks ClawRouter core.
 
 ## Quick start
 
