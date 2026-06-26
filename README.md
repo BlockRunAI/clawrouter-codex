@@ -12,7 +12,9 @@ Codex ──/v1/responses──▶ clawrouter-codex ──@blockrun/llm──▶
 
 By default the bridge pays BlockRun **directly** via the official [`@blockrun/llm`](https://www.npmjs.com/package/@blockrun/llm) SDK (plain per-request x402 on Base) — one process, no proxy, and the model list comes live from the source. It's wire-format translation plus a few conveniences (model picker, web search, a dashboard).
 
-> **Two modes.** Direct (above) is the default. You can also run in **proxy mode** — forwarding to a local [`@blockrun/clawrouter`](https://github.com/BlockRunAI/ClawRouter) proxy that holds the wallet and adds smart routing — with `BRIDGE_MODE=proxy` (or by pointing `CLAWROUTER_PROXY_URL` at a running proxy).
+**Smart routing** works in direct mode too: pick **`blockrun/auto`** and the request is classified and routed to the cheapest capable model (ClawRouter's local rules engine, reused as a library — `<1ms`, no extra LLM call), then paid with full messages + tools. Set `BLOCKRUN_NO_ROUTING=1` to pin a default model instead.
+
+> **Two modes.** Direct (above) is the default. You can also run in **proxy mode** — forwarding to a local [`@blockrun/clawrouter`](https://github.com/BlockRunAI/ClawRouter) proxy that holds the wallet — with `BRIDGE_MODE=proxy` (or by pointing `CLAWROUTER_PROXY_URL` at a running proxy).
 
 ---
 

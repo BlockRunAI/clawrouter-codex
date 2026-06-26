@@ -15,12 +15,54 @@ import { join } from "node:path";
 import { LLMClient, SearchClient } from "@blockrun/llm";
 
 const DEFAULT_API = process.env.BLOCKRUN_API_URL ?? "https://blockrun.ai/api";
-// Server-side smart routing (`blockrun/auto`) is exposed by the SDK only via
-// `smartChat`, which takes a single prompt string and can't carry Codex's
-// messages + tools. So in direct mode `auto` resolves to a concrete default
-// model instead of routing. Override with BLOCKRUN_DEFAULT_MODEL.
+// Fallback model when smart routing is unavailable. Override w/ BLOCKRUN_DEFAULT_MODEL.
 const DEFAULT_MODEL = process.env.BLOCKRUN_DEFAULT_MODEL ?? "anthropic/claude-opus-4.5";
-const resolveModel = (m) => (!m || m === "blockrun/auto" || m === "auto" ? DEFAULT_MODEL : m);
+const AUTO = new Set(["blockrun/auto", "auto", ""]);
+
+// Smart routing: reuse ClawRouter's real routing engine (rules-based, <1ms,
+// local) so `blockrun/auto` picks the cheapest capable model — but keep paying
+// via @blockrun/llm with the full messages + tools (the SDK's own `smartChat`
+// is prompt-only). Loaded lazily; if unavailable, `auto` falls back to
+// DEFAULT_MODEL. Set BLOCKRUN_NO_ROUTING=1 to disable.
+let _router; // undefined = not tried, null = unavailable, object = ready
+async function getRouter() {
+  if (_router !== undefined) return _router;
+  if (process.env.BLOCKRUN_NO_ROUTING === "1") return (_router = null);
+  try {
+    const { route, DEFAULT_ROUTING_CONFIG, BLOCKRUN_MODELS } = await import("@blockrun/clawrouter");
+    const modelPricing = new Map(
+      BLOCKRUN_MODELS.filter((m) => !AUTO.has(m.id)).map((m) => [
+        m.id,
+        { inputPrice: m.inputPrice, outputPrice: m.outputPrice },
+      ]),
+    );
+    _router = { route, opts: { config: DEFAULT_ROUTING_CONFIG, modelPricing } };
+  } catch {
+    _router = null; // @blockrun/clawrouter not resolvable — degrade to default model
+  }
+  return _router;
+}
+
+/** Resolve `blockrun/auto` to a concrete model via ClawRouter's router (full
+ *  request context), returning { model, fallbackModels }. Falls back to
+ *  DEFAULT_MODEL when routing is unavailable; passes concrete models through. */
+async function resolveRouting(model, messages, maxTokens, hasTools) {
+  if (!AUTO.has(model ?? "")) return { model };
+  const r = await getRouter();
+  if (!r) return { model: DEFAULT_MODEL };
+  const sys = messages.filter((m) => m?.role === "system" && typeof m.content === "string").map((m) => m.content).join("\n") || undefined;
+  const lastUser = [...messages].reverse().find((m) => m?.role === "user");
+  const prompt = typeof lastUser?.content === "string" ? lastUser.content : "";
+  try {
+    const d = r.route(prompt, sys, Number(maxTokens) || 1024, { ...r.opts, hasTools: Boolean(hasTools) });
+    if (d?.model) {
+      // eslint-disable-next-line no-console
+      console.log(`[clawrouter-codex] auto → ${d.model} (${d.tier})`);
+      return { model: d.model, fallbackModels: Array.isArray(d.fallbacks) ? d.fallbacks : undefined };
+    }
+  } catch { /* fall through */ }
+  return { model: DEFAULT_MODEL };
+}
 
 /** Resolve the EVM wallet key: explicit env → ~/.blockrun/.session (raw 0x key). */
 export function resolveWalletKey() {
@@ -116,13 +158,19 @@ export function createDirectFetch(opts = {}) {
         const messages = (b.messages ?? []).map((m) =>
           m && m.role === "developer" ? { ...m, role: "system" } : m,
         );
-        const resp = await llm.chatCompletion(resolveModel(b.model), messages, {
+        // `blockrun/auto` → smart-routed model (full request context); concrete
+        // models pass through. Routing decision also yields a fallback chain.
+        const { model, fallbackModels } = await resolveRouting(
+          b.model, messages, b.max_tokens, b.tools?.length,
+        );
+        const resp = await llm.chatCompletion(model, messages, {
           maxTokens: b.max_tokens,
           temperature: b.temperature,
           topP: b.top_p,
           tools: b.tools,
           toolChoice: b.tool_choice,
           stop: b.stop,
+          fallbackModels,
         });
         return json(resp);
       }
