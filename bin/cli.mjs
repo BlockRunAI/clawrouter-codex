@@ -10,6 +10,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const [cmd, ...args] = process.argv.slice(2);
 
 const COMMANDS = {
+  up: "scripts/start.mjs",
   start: "scripts/start.mjs",
   setup: "scripts/setup.mjs",
   doctor: "scripts/doctor.mjs",
@@ -21,9 +22,11 @@ const COMMANDS = {
   daemon: "scripts/install-daemon.mjs",
 };
 
-// Per-command env overrides. `direct` runs the bridge standalone, paying
-// BlockRun via the @blockrun/llm SDK — no ClawRouter proxy subprocess.
+// Per-command env overrides.
+//  - `up` = start + auto-run setup once the bridge is healthy (one command).
+//  - `direct` runs the bridge standalone, paying BlockRun via @blockrun/llm.
 const COMMAND_ENV = {
+  up: { WITH_SETUP: "1" },
   direct: { BLOCKRUN_DIRECT: "1" },
 };
 
@@ -32,7 +35,8 @@ function help() {
 
 Usage: npx @blockrun/clawrouter-codex <command>
 
-  start              bring up the ClawRouter proxy + the bridge (and supervise)
+  up                 start the bridge AND run setup — one command, ready to use
+  start              bring up the bridge (direct mode) and supervise it
   setup              write the Codex profile + generate the model catalog
   doctor             verify the link end to end
   gen-catalog        (re)generate the model catalog from the live model list
@@ -43,8 +47,7 @@ Usage: npx @blockrun/clawrouter-codex <command>
   direct             run the bridge standalone — pay BlockRun directly via the
                      @blockrun/llm SDK, no proxy (decoupled mode)
 
-Quick start:  npx @blockrun/clawrouter-codex start
-              npx @blockrun/clawrouter-codex setup
+Quick start:  npx @blockrun/clawrouter-codex up
               codex --profile clawrouter`);
 }
 

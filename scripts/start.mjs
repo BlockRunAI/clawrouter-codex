@@ -16,7 +16,7 @@
 //                       wallet can't shadow the provided key (use with a funded
 //                       key that lives outside ~/.openclaw)
 
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
@@ -105,11 +105,27 @@ async function startDirect() {
   if (!(await waitHealthy(PORT, "bridge"))) throw new Error("bridge failed to come up");
 }
 
+// `up` runs setup once the bridge is healthy — writes the Codex profile and
+// generates the model catalog (gen-catalog reads the now-running bridge).
+function runSetupOnce() {
+  if (process.env.WITH_SETUP !== "1") return;
+  try {
+    log("running setup (Codex profile + model catalog)…");
+    execFileSync(process.execPath, [join(ROOT, "scripts", "setup.mjs")], {
+      stdio: "inherit",
+      env: { ...process.env, PORT: String(PORT) },
+    });
+  } catch (e) {
+    log(`setup failed: ${e.message} — run \`npx @blockrun/clawrouter-codex setup\` manually`);
+  }
+}
+
 async function main() {
   if (!existsSync(STATE)) mkdirSync(STATE, { recursive: true });
 
   if (!PROXY_MODE) {
     await startDirect();
+    runSetupOnce();
     log(`✅ link up (direct) — point Codex at http://localhost:${PORT}/v1`);
     if (children.length === 0) { log("bridge already running; exiting"); process.exit(0); }
     return;
@@ -146,6 +162,7 @@ async function main() {
     if (!(await waitHealthy(PORT, "bridge"))) throw new Error("bridge failed to come up");
   }
 
+  runSetupOnce();
   log(`✅ link up — point Codex at http://localhost:${PORT}/v1`);
   if (children.length === 0) { log("nothing to supervise (both were already running); exiting"); process.exit(0); }
 }
