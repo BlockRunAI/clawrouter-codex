@@ -83,7 +83,13 @@ async function main() {
   if (!res.ok) throw new Error(`GET ${proxy}/models failed: ${res.status}`);
   const list = await res.json();
   const all = (Array.isArray(list?.data) ? list.data : []).map((m) => m.id).filter(Boolean);
-  const perSeries = Number(arg("--per-series", process.env.PER_SERIES ?? "3"));
+  // Latest N distinct model lines per provider (default 2): keeps the picker
+  // compact + diverse — each family's newest flagships, not 6 versions of one.
+  const perFamily = Number(arg("--per-family", process.env.PER_FAMILY ?? "2"));
+  // Flagship providers first, free tier last — so the top of the picker is a
+  // diverse spread (Claude, GPT, Gemini, DeepSeek, Kimi, MiniMax, GLM, Grok…).
+  const FAMILY_ORDER = ["anthropic", "openai", "google", "deepseek", "moonshot", "minimax", "zai", "xai", "qwen", "free"];
+  const famRank = (f) => { const i = FAMILY_ORDER.indexOf(f); return i === -1 ? FAMILY_ORDER.length : i; };
   // NVIDIA-hosted models mirror the free tier — drop them so each open model
   // appears once (as the free entry). Add families here to hide them.
   const DROP_FAMILIES = new Set((process.env.DROP_FAMILIES ?? "nvidia").split(",").filter(Boolean));
@@ -99,27 +105,36 @@ async function main() {
   const canonical = all.filter((id) => {
     const [fam, ...rest] = id.split("/");
     const tail = rest.join("/");
-    return tail && /\d/.test(tail) && !MEDIA.test(id) && !DROP_FAMILIES.has(fam) && !DROP_MODELS.has(id);
+    // Keep real models (have a version digit OR a hyphenated name like
+    // deepseek-chat); drop bare single-word aliases (anthropic/claude, /sonnet…).
+    const real = tail && (/\d/.test(tail) || tail.includes("-"));
+    return real && !MEDIA.test(id) && !DROP_FAMILIES.has(fam) && !DROP_MODELS.has(id);
   });
 
-  // Group by model SERIES (version stripped), de-dup dashed/dotted spellings,
-  // then keep the latest `perSeries` versions of each series. So Claude Opus
-  // keeps 4.7/4.6/4.5 and GPT-5 keeps 5.5/5.4/5.3.
-  const series = new Map();
+  // 1. Collapse each model SERIES to its latest version (dedups dashed/dotted
+  //    spellings and old minor versions).
+  const byLine = new Map();
   const seen = new Set();
   for (const id of canonical) {
     const m = parseModel(id);
-    if (seen.has(m.key)) continue; // collapse dashed/dotted spelling duplicates
+    if (seen.has(m.key)) continue;
     seen.add(m.key);
-    if (!series.has(m.line)) series.set(m.line, []);
-    series.get(m.line).push(m);
+    const prev = byLine.get(m.line);
+    if (!prev || m.version > prev.version) byLine.set(m.line, m);
+  }
+  // 2. Keep the latest `perFamily` distinct lines per provider.
+  const byFamily = new Map();
+  for (const m of byLine.values()) {
+    if (!byFamily.has(m.family)) byFamily.set(m.family, []);
+    byFamily.get(m.family).push(m);
   }
   const picked = [];
-  for (const arr of series.values()) {
+  for (const arr of byFamily.values()) {
     arr.sort((a, b) => b.version - a.version);
-    picked.push(...arr.slice(0, perSeries));
+    picked.push(...arr.slice(0, perFamily));
   }
-  picked.sort((a, b) => a.family.localeCompare(b.family) || b.version - a.version);
+  // 3. Order: flagship families first, free last; newest version first within a family.
+  picked.sort((a, b) => famRank(a.family) - famRank(b.family) || b.version - a.version);
 
   const ids = ["blockrun/auto", ...picked.map((m) => m.slug)];
   if (ids.length === 0) throw new Error(`no usable models from ${proxy}/models`);
