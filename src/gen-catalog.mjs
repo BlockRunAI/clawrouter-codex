@@ -111,20 +111,15 @@ async function main() {
     return real && !MEDIA.test(id) && !DROP_FAMILIES.has(fam) && !DROP_MODELS.has(id);
   });
 
-  // 1. Collapse each model SERIES to its latest version (dedups dashed/dotted
-  //    spellings and old minor versions).
-  const byLine = new Map();
+  // Keep the latest `perFamily` models per provider, by version (dedup dashed/
+  // dotted spellings). So OpenAI keeps GPT-5.5 + GPT-5.4 and Anthropic keeps
+  // Claude Opus 4.8 + 4.7 — the two newest flagships per family, not 6 of one.
   const seen = new Set();
+  const byFamily = new Map();
   for (const id of canonical) {
     const m = parseModel(id);
     if (seen.has(m.key)) continue;
     seen.add(m.key);
-    const prev = byLine.get(m.line);
-    if (!prev || m.version > prev.version) byLine.set(m.line, m);
-  }
-  // 2. Keep the latest `perFamily` distinct lines per provider.
-  const byFamily = new Map();
-  for (const m of byLine.values()) {
     if (!byFamily.has(m.family)) byFamily.set(m.family, []);
     byFamily.get(m.family).push(m);
   }
