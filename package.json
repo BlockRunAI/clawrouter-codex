@@ -38,5 +38,15 @@
     "scripts",
     "README.md"
   ],
-  "keywords": ["codex", "clawrouter", "blockrun", "responses-api", "x402", "llm-router"]
+  "keywords": [
+    "codex",
+    "clawrouter",
+    "blockrun",
+    "responses-api",
+    "x402",
+    "llm-router"
+  ],
+  "dependencies": {
+    "@blockrun/llm": "^3.5.0"
+  }
 }

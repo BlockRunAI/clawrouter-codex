@@ -14,6 +14,9 @@ import * as Dashboard from "./dashboard.js";
 
 const DEFAULT_PORT = 8403;
 const DEFAULT_UPSTREAM = "http://127.0.0.1:8402/v1";
+// Sentinel upstream for decoupled mode: the host is irrelevant — requests are
+// served by the @blockrun/llm-backed directFetch, not an HTTP proxy.
+const DIRECT_UPSTREAM = "http://direct/v1";
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -323,26 +326,35 @@ export function createBridge({ upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } 
   });
 }
 
-export function startBridge({ port = DEFAULT_PORT, upstream = DEFAULT_UPSTREAM } = {}) {
-  const server = createBridge({ upstream });
+export function startBridge({ port = DEFAULT_PORT, upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } = {}) {
+  const server = createBridge({ upstream, fetchImpl });
   return new Promise((resolve) => {
     server.listen(port, "127.0.0.1", () => {
       const addr = server.address();
       // eslint-disable-next-line no-console
       console.log(`[clawrouter-codex] bridge listening on http://127.0.0.1:${addr.port}`);
       // eslint-disable-next-line no-console
-      console.log(`[clawrouter-codex] forwarding to ClawRouter proxy at ${upstream}`);
+      console.log(
+        upstream === DIRECT_UPSTREAM
+          ? `[clawrouter-codex] direct mode — paying BlockRun via @blockrun/llm (no proxy)`
+          : `[clawrouter-codex] forwarding to ClawRouter proxy at ${upstream}`,
+      );
       resolve({ server, port: addr.port });
     });
   });
 }
 
-// CLI entry: `node src/server.js`
+// CLI entry: `node src/server.js`  (BLOCKRUN_DIRECT=1 → decoupled, pays via SDK)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startBridge({
-    port: Number(process.env.PORT ?? DEFAULT_PORT),
-    upstream: process.env.CLAWROUTER_PROXY_URL ?? DEFAULT_UPSTREAM,
-  });
+  const opts = { port: Number(process.env.PORT ?? DEFAULT_PORT) };
+  if (process.env.BLOCKRUN_DIRECT === "1") {
+    const { createDirectFetch } = await import("./direct.js");
+    opts.fetchImpl = createDirectFetch();
+    opts.upstream = DIRECT_UPSTREAM;
+  } else {
+    opts.upstream = process.env.CLAWROUTER_PROXY_URL ?? DEFAULT_UPSTREAM;
+  }
+  startBridge(opts);
 }
 
 export const _config = { DEFAULT_PORT, DEFAULT_UPSTREAM };

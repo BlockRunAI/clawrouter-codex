@@ -14,10 +14,17 @@ const COMMANDS = {
   setup: "scripts/setup.mjs",
   doctor: "scripts/doctor.mjs",
   bridge: "src/server.js",
+  direct: "src/server.js",
   "gen-catalog": "src/gen-catalog.mjs",
   desktop: "scripts/desktop-toggle.mjs",
   websearch: "scripts/websearch-toggle.mjs",
   daemon: "scripts/install-daemon.mjs",
+};
+
+// Per-command env overrides. `direct` runs the bridge standalone, paying
+// BlockRun via the @blockrun/llm SDK — no ClawRouter proxy subprocess.
+const COMMAND_ENV = {
+  direct: { BLOCKRUN_DIRECT: "1" },
 };
 
 function help() {
@@ -32,7 +39,9 @@ Usage: npx @blockrun/clawrouter-codex <command>
   desktop on|off     show ClawRouter models in the Codex Desktop picker
   websearch on|off   enable/disable live web search (BlockRun Exa)
   daemon             install a login daemon (macOS) to keep it up
-  bridge             run only the Responses bridge
+  bridge             run only the Responses bridge (forwards to a ClawRouter proxy)
+  direct             run the bridge standalone — pay BlockRun directly via the
+                     @blockrun/llm SDK, no proxy (decoupled mode)
 
 Quick start:  npx @blockrun/clawrouter-codex start
               npx @blockrun/clawrouter-codex setup
@@ -49,4 +58,7 @@ if (!target) {
   help();
   process.exit(1);
 }
-spawn(process.execPath, [join(ROOT, target), ...args], { stdio: "inherit" }).on("exit", (c) => process.exit(c ?? 0));
+spawn(process.execPath, [join(ROOT, target), ...args], {
+  stdio: "inherit",
+  env: { ...process.env, ...(COMMAND_ENV[cmd] ?? {}) },
+}).on("exit", (c) => process.exit(c ?? 0));
