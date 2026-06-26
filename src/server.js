@@ -248,7 +248,16 @@ async function passthrough(req, res, { upstream, fetchImpl = fetch }) {
 
 export function createBridge({ upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } = {}) {
   return createServer((req, res) => {
-    if (req.url === "/health") {
+    if (req.url === "/health" || req.url?.startsWith("/health?")) {
+      // `?full=true` surfaces wallet/balance — direct mode answers from the SDK,
+      // proxy mode forwards to the proxy's /health. Used by `doctor` + dashboard.
+      if (req.url.includes("full=true")) {
+        fetchImpl(`${upstream}/health?full=true`)
+          .then((r) => r.json())
+          .then((d) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ ...d, upstream })); })
+          .catch((e) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ status: "ok", upstream, walletError: e.message })); });
+        return;
+      }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ status: "ok", upstream }));
       return;

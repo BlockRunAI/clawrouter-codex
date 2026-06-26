@@ -7,7 +7,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const PORT = process.env.PORT ?? "8403";
-const PROXY_PORT = process.env.PROXY_PORT ?? "8404";
 const CODEX = join(homedir(), ".codex");
 const BASE = join(CODEX, "config.toml");
 const PROFILE = join(CODEX, "clawrouter.config.toml");
@@ -28,22 +27,24 @@ const read = (f) => (existsSync(f) ? readFileSync(f, "utf8") : "");
 
 console.log("\nclawrouter-codex doctor\n");
 
-// 1. bridge
+// 1. bridge + mode
+let direct = true;
 try {
   const h = await get(`http://127.0.0.1:${PORT}/health`);
-  line(h.status === "ok", `bridge :${PORT}`, `→ ${h.upstream}`);
+  direct = h.upstream === "http://direct/v1";
+  line(h.status === "ok", `bridge :${PORT}`, direct ? "direct mode (pays via @blockrun/llm, no proxy)" : `proxy mode → ${h.upstream}`);
 } catch (e) {
-  line(false, `bridge :${PORT}`, e.message, "start it: `npm start`");
+  line(false, `bridge :${PORT}`, e.message, "start it: `npx @blockrun/clawrouter-codex start`");
 }
 
-// 2. proxy + wallet + balance
+// 2. wallet + balance (same endpoint in both modes — the bridge surfaces it)
 try {
-  const h = await get(`http://127.0.0.1:${PROXY_PORT}/health?full=true`);
-  line(!!h.wallet, `proxy :${PROXY_PORT} wallet`, `${(h.wallet || "").slice(0, 12)}… ${h.balance ?? ""}`);
+  const h = await get(`http://127.0.0.1:${PORT}/health?full=true`);
+  line(!!h.wallet, "wallet", `${(h.wallet || "").slice(0, 12)}… ${h.balance ?? ""}`);
   line(!h.isEmpty, "wallet funded", h.isEmpty ? "empty — paid models fall back to free" : "ok",
     "send USDC (Base) to the wallet above");
 } catch (e) {
-  line(false, `proxy :${PROXY_PORT}`, e.message, "`npm start` brings it up");
+  line(false, "wallet", e.message, "is the bridge up? `npx @blockrun/clawrouter-codex start`");
 }
 
 // 3. catalog

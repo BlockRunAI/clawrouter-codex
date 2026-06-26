@@ -61,14 +61,15 @@ A loopback panel: a master **Subscription ⇄ ClawRouter** switch, wallet balanc
 
 | Command | What it does |
 |---|---|
-| `start` | Bring up the ClawRouter proxy (`:8404`, holds the wallet) + the bridge (`:8403`), and supervise both |
+| `start` | Bring up the bridge (`:8403`) in **direct mode** — pays BlockRun via the SDK, no proxy — and supervise it |
 | `setup` | Write the `clawrouter` profile and generate the model catalog |
-| `doctor` | Verify the link end to end (bridge, proxy, wallet, catalog, config) |
+| `doctor` | Verify the link end to end (bridge, mode, wallet, catalog, config) |
 | `gen-catalog` | (Re)generate the model catalog from the live model list |
-| `desktop on\|off` | Toggle the Codex Desktop picker between ClawRouter and native GPT |
+| `desktop on\|off` | Toggle the Codex Desktop picker between BlockRun and native GPT |
 | `websearch on\|off` | Toggle live web search |
 | `daemon` | Install a macOS LaunchAgent to keep the link up across reboots |
-| `bridge` | Run only the Responses bridge |
+| `direct` | Run only the bridge in direct mode (what `start` uses) |
+| `bridge` | Run only the bridge in **proxy mode** (forwards to a `@blockrun/clawrouter` proxy) |
 
 Installed globally (`npm i -g @blockrun/clawrouter-codex`) the same commands are available as `clawrouter-codex <command>`.
 
@@ -97,14 +98,16 @@ requires_openai_auth = false
 | Env var | Default | Effect |
 |---|---|---|
 | `PORT` | `8403` | Port the bridge listens on |
-| `PROXY_PORT` | `8404` | Port `start` launches the ClawRouter proxy on |
-| `CLAWROUTER_PROXY_URL` | `http://127.0.0.1:8404/v1` | Upstream the bridge forwards to |
+| `BLOCKRUN_WALLET_KEY` | — | Raw `0x` EVM key for x402 (overrides `~/.blockrun/.session`) |
+| `BLOCKRUN_DEFAULT_MODEL` | `anthropic/claude-opus-4.5` | Model that `blockrun/auto` resolves to in direct mode |
+| `BLOCKRUN_API_URL` | `https://blockrun.ai/api` | BlockRun endpoint the SDK pays |
+| **proxy mode only** | | |
+| `BRIDGE_MODE=proxy` | — | Forward to a `@blockrun/clawrouter` proxy instead of paying directly |
+| `PROXY_PORT` | `8404` | Port `start` launches the proxy on (proxy mode) |
+| `CLAWROUTER_PROXY_URL` | `http://127.0.0.1:8404/v1` | Proxy upstream to forward to (also enables proxy mode) |
 | `CLAWROUTER_CMD` | `npx -y @blockrun/clawrouter@latest` | Command `start` uses to launch the proxy |
-| `WALLET_KEY_FILE` | — | Read the x402 wallet key from this file |
-| `BLOCKRUN_WALLET_KEY` | — | Raw `0x` EVM key for x402 (overrides discovery) |
-| `ISOLATE_HOME` | — | `1` = run the proxy under a fresh HOME so a saved wallet can't shadow the key |
 
-`start` auto-discovers `~/.blockrun/.session` and isolates HOME for it; on most machines no wallet env is needed.
+`start` auto-discovers `~/.blockrun/.session`; on most machines no wallet env is needed.
 
 ### Keep it up across reboots (macOS)
 
