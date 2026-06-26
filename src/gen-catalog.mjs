@@ -65,7 +65,9 @@ function prettyName(id) {
  */
 function parseModel(id) {
   const norm = normSlug(id);
-  const family = norm.split("/")[0];
+  // Group DeepSeek across namespaces (paid deepseek/* + free/deepseek-*) so the
+  // family shows V4 Pro + V4 Flash together rather than splitting paid/free.
+  const family = /deepseek/i.test(norm) ? "deepseek" : norm.split("/")[0];
   const tail = norm.split("/").slice(1).join("/") || norm;
   // version = the last dotted/whole number in the tail (4.7, 5.5, 2.5, 3.1, 120)
   const vmatch = tail.match(/(\d+(?:\.\d+)?)(?!.*\d)/);
@@ -96,8 +98,10 @@ async function main() {
   // Specific slugs to hide: stale gateway entries that silently redirect elsewhere
   // (e.g. deepseek-v4-pro was delisted 2026-04-30 and redirects to v4-flash, so
   // showing "DeepSeek V4 Pro (free)" is doubly wrong — not pro, not really there).
+  // free/deepseek-v4-pro is a delisted redirect to v4-flash; the paid
+  // deepseek/deepseek-v4-pro is a real model again, so only drop the free dup.
   const DROP_MODELS = new Set(
-    (process.env.DROP_MODELS ?? "free/deepseek-v4-pro,deepseek/deepseek-v4-pro").split(",").filter(Boolean),
+    (process.env.DROP_MODELS ?? "free/deepseek-v4-pro").split(",").filter(Boolean),
   );
 
   // Canonical "provider/model" slugs; drop bare aliases (no digit in the tail,
