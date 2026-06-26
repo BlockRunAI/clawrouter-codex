@@ -43,6 +43,54 @@ function json(obj, status = 200) {
   });
 }
 
+// Chat endpoints in the SDK cost log (LLM spend — excludes image/video/etc).
+const CHAT_ENDPOINTS = new Set(["/v1/chat/completions", "/api/v1/chat/completions", "/v1/messages"]);
+
+/**
+ * Build a 7-day spend summary from the SDK's local cost log
+ * (~/.blockrun/cost_log.jsonl, one JSON CostEntry per line), filtered to chat
+ * endpoints. Shapes the result for the dashboard's spend panel. Returns an
+ * empty window if the log is missing/unreadable.
+ */
+function buildStats() {
+  const empty = { days: 7, totalRequests: 0, totalCost: 0, dailyBreakdown: [], byModel: {} };
+  let raw;
+  try {
+    raw = readFileSync(join(homedir(), ".blockrun", "cost_log.jsonl"), "utf8");
+  } catch {
+    return empty;
+  }
+  const nowSec = Date.now() / 1000;
+  const weekAgo = nowSec - 7 * 86_400;
+  const dayKey = (sec) => new Date(sec * 1000).toISOString().slice(0, 10);
+  const byDay = new Map();
+  const byModel = {};
+  let totalCost = 0;
+  let totalRequests = 0;
+  for (const line of raw.split("\n")) {
+    if (!line) continue;
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    if (typeof e.ts !== "number" || e.ts < weekAgo) continue;
+    if (e.endpoint && !CHAT_ENDPOINTS.has(e.endpoint)) continue;
+    const cost = Number(e.cost_usd) || 0;
+    totalCost += cost;
+    totalRequests += 1;
+    if (e.model) byModel[e.model] = (byModel[e.model] ?? 0) + cost;
+    const d = byDay.get(dayKey(e.ts)) ?? { cost: 0, requests: 0 };
+    d.cost += cost;
+    d.requests += 1;
+    byDay.set(dayKey(e.ts), d);
+  }
+  const dailyBreakdown = [];
+  for (let i = 6; i >= 0; i--) {
+    const key = dayKey(nowSec - i * 86_400);
+    const d = byDay.get(key) ?? { cost: 0, requests: 0 };
+    dailyBreakdown.push({ date: key, cost: d.cost, requests: d.requests });
+  }
+  return { days: 7, totalRequests, totalCost, dailyBreakdown, byModel };
+}
+
 /**
  * Build a `fetch`-compatible function backed by @blockrun/llm. Only the path is
  * significant (the host is ignored), so the bridge can keep calling
@@ -119,10 +167,11 @@ export function createDirectFetch(opts = {}) {
         });
       }
 
-      // Spend stats: direct mode has no server-side ledger; return an empty
-      // window so the dashboard renders without error.
+      // Spend stats: build a 7-day window from the SDK's local cost log
+      // (~/.blockrun/cost_log.jsonl) — direct mode has no server-side ledger,
+      // but the SDK records every settled payment with a timestamp.
       if (path.endsWith("/stats")) {
-        return json({ days: 7, total: 0, daily: [] });
+        return json(buildStats());
       }
 
       return json({ error: { message: `direct: unsupported ${method} ${path}` } }, 404);
