@@ -35,7 +35,7 @@ try {
 // 2. Write the CLI profile (base config stays as-is → subscription default kept).
 const profile = `# ClawRouter profile for Codex — use with:  codex --profile clawrouter
 # Base ~/.codex/config.toml is untouched, so plain \`codex\` stays on your default.
-# Requires the local link up:  npm start  (proxy :8404 + bridge :${PORT})
+# Requires the bridge up:  npx @blockrun/clawrouter-codex start  (direct mode, :${PORT})
 
 model = "blockrun/auto"
 model_provider = "clawrouter"
@@ -58,8 +58,8 @@ if (legacy) {
 
 console.log(`
 Done. Next:
-  npm start                    # bring up proxy + bridge (if not already)
-  codex --profile clawrouter   # use ClawRouter models in the CLI
+  npx @blockrun/clawrouter-codex start   # bring up the bridge (direct mode)
+  codex --profile clawrouter   # use BlockRun models in the CLI
   npm run desktop on           # also show them in Codex Desktop's picker
   npm run websearch on         # enable live web search
   npm run doctor               # verify the whole link

@@ -87,8 +87,33 @@ for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => { shuttingDown = true; children.forEach((c) => c.kill()); process.exit(0); });
 }
 
+// Direct mode (default): the bridge pays BlockRun itself via @blockrun/llm —
+// one process, no proxy. Opt into the legacy proxy path with BRIDGE_MODE=proxy
+// (or by pointing CLAWROUTER_PROXY_URL at an already-running proxy).
+const PROXY_MODE = process.env.BRIDGE_MODE === "proxy" || Boolean(process.env.CLAWROUTER_PROXY_URL);
+
+async function startDirect() {
+  if (await healthy(PORT)) { log(`bridge already up on :${PORT}`); return; }
+  const { key, auto } = resolveWallet();
+  if (auto) log(`auto-detected BlockRun wallet at ${BLOCKRUN_WALLET}`);
+  log(`starting bridge on :${PORT} — direct mode (pays BlockRun via @blockrun/llm, no proxy)`);
+  supervise("bridge", process.execPath, [join(ROOT, "src", "server.js")], {
+    PORT: String(PORT),
+    BLOCKRUN_DIRECT: "1",
+    ...(key ? { BLOCKRUN_WALLET_KEY: key } : {}),
+  });
+  if (!(await waitHealthy(PORT, "bridge"))) throw new Error("bridge failed to come up");
+}
+
 async function main() {
   if (!existsSync(STATE)) mkdirSync(STATE, { recursive: true });
+
+  if (!PROXY_MODE) {
+    await startDirect();
+    log(`✅ link up (direct) — point Codex at http://localhost:${PORT}/v1`);
+    if (children.length === 0) { log("bridge already running; exiting"); process.exit(0); }
+    return;
+  }
 
   // 1. ClawRouter proxy (holds the wallet, does x402)
   if (await healthy(PROXY_PORT)) {

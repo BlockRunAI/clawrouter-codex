@@ -15,6 +15,12 @@ import { join } from "node:path";
 import { LLMClient, SearchClient } from "@blockrun/llm";
 
 const DEFAULT_API = process.env.BLOCKRUN_API_URL ?? "https://blockrun.ai/api";
+// Server-side smart routing (`blockrun/auto`) is exposed by the SDK only via
+// `smartChat`, which takes a single prompt string and can't carry Codex's
+// messages + tools. So in direct mode `auto` resolves to a concrete default
+// model instead of routing. Override with BLOCKRUN_DEFAULT_MODEL.
+const DEFAULT_MODEL = process.env.BLOCKRUN_DEFAULT_MODEL ?? "anthropic/claude-opus-4.5";
+const resolveModel = (m) => (!m || m === "blockrun/auto" || m === "auto" ? DEFAULT_MODEL : m);
 
 /** Resolve the EVM wallet key: explicit env → ~/.blockrun/.session (raw 0x key). */
 export function resolveWalletKey() {
@@ -62,7 +68,7 @@ export function createDirectFetch(opts = {}) {
         const messages = (b.messages ?? []).map((m) =>
           m && m.role === "developer" ? { ...m, role: "system" } : m,
         );
-        const resp = await llm.chatCompletion(b.model, messages, {
+        const resp = await llm.chatCompletion(resolveModel(b.model), messages, {
           maxTokens: b.max_tokens,
           temperature: b.temperature,
           topP: b.top_p,

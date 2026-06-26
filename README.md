@@ -4,13 +4,15 @@
 
 [![npm](https://img.shields.io/npm/v/@blockrun/clawrouter-codex?color=cb3837&logo=npm)](https://www.npmjs.com/package/@blockrun/clawrouter-codex)
 
-Codex only speaks the OpenAI **Responses API** (`/v1/responses`). ClawRouter speaks **Chat Completions**. This is a thin local bridge that translates between them, so Codex (CLI, IDE, and Desktop) can use ClawRouter's models:
+Codex only speaks the OpenAI **Responses API** (`/v1/responses`). BlockRun speaks **Chat Completions**. This is a local bridge that translates between them and pays per request, so Codex (CLI, IDE, and Desktop) can use BlockRun's models:
 
 ```
-Codex ──/v1/responses──▶ clawrouter-codex ──/v1/chat/completions──▶ ClawRouter ──x402──▶ BlockRun
+Codex ──/v1/responses──▶ clawrouter-codex ──@blockrun/llm──▶ BlockRun   (x402 USDC, default)
 ```
 
-The bridge holds no wallet and signs no payments — routing and x402 stay in the ClawRouter proxy it forwards to. It's pure wire-format translation, plus a few conveniences (model picker, web search, a dashboard).
+By default the bridge pays BlockRun **directly** via the official [`@blockrun/llm`](https://www.npmjs.com/package/@blockrun/llm) SDK (plain per-request x402 on Base) — one process, no proxy, and the model list comes live from the source. It's wire-format translation plus a few conveniences (model picker, web search, a dashboard).
+
+> **Two modes.** Direct (above) is the default. You can also run in **proxy mode** — forwarding to a local [`@blockrun/clawrouter`](https://github.com/BlockRunAI/ClawRouter) proxy that holds the wallet and adds smart routing — with `BRIDGE_MODE=proxy` (or by pointing `CLAWROUTER_PROXY_URL` at a running proxy).
 
 ---
 
@@ -19,14 +21,14 @@ The bridge holds no wallet and signs no payments — routing and x402 stay in th
 You need [Node ≥ 20](https://nodejs.org) and a funded BlockRun wallet (`~/.blockrun/.session`, or set `BLOCKRUN_WALLET_KEY`). Then:
 
 ```bash
-npx @blockrun/clawrouter-codex start    # bring up the link (proxy :8404 + bridge :8403)
+npx @blockrun/clawrouter-codex start    # bring up the bridge (direct mode, :8403)
 npx @blockrun/clawrouter-codex setup    # write the Codex profile + generate the model catalog
 npx @blockrun/clawrouter-codex doctor   # verify everything is wired
 
-codex --profile clawrouter              # use ClawRouter models in the Codex CLI
+codex --profile clawrouter              # use BlockRun models in the Codex CLI
 ```
 
-`setup` writes a **profile** (`~/.codex/clawrouter.config.toml`), so your base config — and your ChatGPT-subscription default — is untouched: plain `codex` still uses it, `codex --profile clawrouter` uses ClawRouter.
+`setup` writes a **profile** (`~/.codex/clawrouter.config.toml`), so your base config — and your ChatGPT-subscription default — is untouched: plain `codex` still uses it, `codex --profile clawrouter` uses BlockRun.
 
 > No funded wallet yet? It still works — unfunded requests fall back to the free models. Fund USDC on Base to unlock the paid ones (the dashboard shows the address + a QR).
 
