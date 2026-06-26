@@ -21,14 +21,17 @@ By default the bridge pays BlockRun **directly** via the official [`@blockrun/ll
 You need [Node ≥ 20](https://nodejs.org) and a funded BlockRun wallet (`~/.blockrun/.session`, or set `BLOCKRUN_WALLET_KEY`). Then:
 
 ```bash
-npx @blockrun/clawrouter-codex start    # bring up the bridge (direct mode, :8403)
-npx @blockrun/clawrouter-codex setup    # write the Codex profile + generate the model catalog
-npx @blockrun/clawrouter-codex doctor   # verify everything is wired
-
+npx @blockrun/clawrouter-codex up       # start the bridge + write the Codex profile + build the catalog
 codex --profile clawrouter              # use BlockRun models in the Codex CLI
 ```
 
-`setup` writes a **profile** (`~/.codex/clawrouter.config.toml`), so your base config — and your ChatGPT-subscription default — is untouched: plain `codex` still uses it, `codex --profile clawrouter` uses BlockRun.
+That's it. `up` brings up the bridge (direct mode, `:8403`) and runs `setup` once it's healthy, then stays running. Want the models in **Codex Desktop's** picker too? Add:
+
+```bash
+npx @blockrun/clawrouter-codex desktop on   # restart Codex (Cmd+Q) after
+```
+
+`setup` writes a **profile** (`~/.codex/clawrouter.config.toml`), so your base config — and your ChatGPT-subscription default — is untouched: plain `codex` still uses it, `codex --profile clawrouter` uses BlockRun. (`start`, `setup`, `doctor` are still available as separate steps if you prefer.)
 
 > No funded wallet yet? It still works — unfunded requests fall back to the free models. Fund USDC on Base to unlock the paid ones (the dashboard shows the address + a QR).
 
