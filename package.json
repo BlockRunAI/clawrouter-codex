@@ -1,6 +1,6 @@
 {
   "name": "@blockrun/clawrouter-codex",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Front-adapter that lets OpenAI Codex (Responses API) talk to a ClawRouter proxy — wallet-signed, x402-paid, zero API keys.",
   "type": "module",
   "license": "MIT",

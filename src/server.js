@@ -1,12 +1,13 @@
-// clawrouter-codex — a thin front-adapter that lets OpenAI Codex talk to a
-// running ClawRouter proxy.
+// clawrouter-codex — a front-adapter that lets OpenAI Codex run on BlockRun
+// models. It translates Codex's Responses wire format ⇄ Chat Completions.
 //
-//   Codex ──/v1/responses──▶ [this bridge] ──/v1/chat/completions──▶ ClawRouter ──x402──▶ BlockRun
+//   Codex ──/v1/responses──▶ [this bridge] ──▶ BlockRun
 //
-// The bridge holds NO wallet and signs NO payments: routing, x402 micropayments
-// and model fallback all stay in the canonical ClawRouter proxy. This process
-// only translates the Responses wire format ⇄ Chat Completions, forwarding to a
-// locally-spawned `npx @blockrun/clawrouter` proxy that holds the wallet.
+// Two payment paths, both via the injected `fetchImpl`:
+//   • direct (default): src/direct.js pays BlockRun itself via @blockrun/llm
+//     (plain per-request x402 on Base — one process, no proxy).
+//   • proxy (BRIDGE_MODE=proxy): forward to a local `@blockrun/clawrouter`
+//     proxy that holds the wallet and adds smart routing.
 
 import { createServer } from "node:http";
 import { responsesToChat, chatToResponsesEvents, eventsToSSE } from "./translate.js";

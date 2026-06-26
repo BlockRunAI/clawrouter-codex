@@ -179,7 +179,8 @@ let busy=false,addr='';
 async function load(){
   const d=await (await fetch('/dashboard/api')).json();
   const w=d.wallet||{},s=d.stats||{},t=d.toggles||{};addr=w.wallet||'';
-  document.getElementById('sub').textContent='proxy '+(d.upstream||'')+' · '+new Date().toLocaleTimeString();
+  const mode=(w.mode==='direct'||d.upstream==='http://direct/v1')?'direct (BlockRun SDK)':'proxy '+(d.upstream||'');
+  document.getElementById('sub').textContent=mode+' · '+new Date().toLocaleTimeString();
   const empty=w.isEmpty,low=!empty&&w.balance&&parseFloat(String(w.balance).replace(/[^0-9.]/g,''))<1;
   document.getElementById('bal').textContent=w.balance||'—';
   document.getElementById('bal').style.color=empty?'var(--bad)':low?'var(--warn)':'var(--fg)';
