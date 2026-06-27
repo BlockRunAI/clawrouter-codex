@@ -15,6 +15,7 @@
     "start": "node scripts/start.mjs",
     "setup": "node scripts/setup.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "wallet": "node scripts/wallet.mjs",
     "bridge": "node src/server.js",
     "gen-catalog": "node src/gen-catalog.mjs",
     "websearch": "node scripts/websearch-toggle.mjs",
@@ -48,6 +49,7 @@
   ],
   "dependencies": {
     "@blockrun/clawrouter": "^0.12.212",
-    "@blockrun/llm": "^3.5.0"
+    "@blockrun/llm": "^3.5.0",
+    "viem": "^2.53.1"
   }
 }

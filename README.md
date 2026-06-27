@@ -69,6 +69,7 @@ A loopback panel: a master **Subscription ⇄ ClawRouter** switch, wallet balanc
 | `start` | Bring up the bridge (`:8403`) in **direct mode** — pays BlockRun via the SDK, no proxy — and supervise it |
 | `setup` | Write the `clawrouter` profile and generate the model catalog |
 | `doctor` | Verify the link end to end (bridge, mode, wallet, catalog, config) |
+| `wallet` | Print the full wallet address to fund without opening the dashboard |
 | `gen-catalog` | (Re)generate the model catalog from the live model list |
 | `desktop on\|off` | Toggle the Codex Desktop picker between BlockRun and native GPT |
 | `websearch on\|off` | Toggle live web search |
@@ -113,6 +114,12 @@ requires_openai_auth = false
 | `CLAWROUTER_CMD` | `npx -y @blockrun/clawrouter@latest` | Command `start` uses to launch the proxy |
 
 `start` auto-discovers `~/.blockrun/.session`; on most machines no wallet env is needed.
+
+To see the full funding address from a terminal, even on a remote VPS:
+
+```bash
+npx @blockrun/clawrouter-codex wallet
+```
 
 ### Keep it up across reboots (macOS)
 
