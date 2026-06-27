@@ -14,6 +14,7 @@ const COMMANDS = {
   start: "scripts/start.mjs",
   setup: "scripts/setup.mjs",
   doctor: "scripts/doctor.mjs",
+  wallet: "scripts/wallet.mjs",
   bridge: "src/server.js",
   direct: "src/server.js",
   "gen-catalog": "src/gen-catalog.mjs",
@@ -39,6 +40,7 @@ Usage: npx @blockrun/clawrouter-codex <command>
   start              bring up the bridge (direct mode) and supervise it
   setup              write the Codex profile + generate the model catalog
   doctor             verify the link end to end
+  wallet             show the full wallet address to fund
   gen-catalog        (re)generate the model catalog from the live model list
   desktop on|off     show ClawRouter models in the Codex Desktop picker
   websearch on|off   enable/disable live web search (BlockRun Exa)
