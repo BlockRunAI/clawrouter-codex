@@ -10,10 +10,8 @@
 //   Codex → bridge (translate) → @blockrun/llm → blockrun.ai      (no proxy)
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { LLMClient, SearchClient } from "@blockrun/llm";
-import { resolvePrivateKey } from "@blockrun/core";
+import { resolvePrivateKey, paths } from "@blockrun/core";
 
 const DEFAULT_API = process.env.BLOCKRUN_API_URL ?? "https://blockrun.ai/api";
 // Fallback model when smart routing is unavailable. Override w/ BLOCKRUN_DEFAULT_MODEL.
@@ -98,7 +96,9 @@ function buildStats() {
   const empty = { days: 7, totalRequests: 0, totalCost: 0, dailyBreakdown: [], byModel: {} };
   let raw;
   try {
-    raw = readFileSync(join(homedir(), ".blockrun", "cost_log.jsonl"), "utf8");
+    // Path from @blockrun/core so BLOCKRUN_HOME isolation and any future layout
+    // change apply here too (previously hand-joined against os.homedir()).
+    raw = readFileSync(paths().costLog, "utf8");
   } catch {
     return empty;
   }

@@ -21,6 +21,7 @@ import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { paths as corePaths } from "@blockrun/core";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PORT = Number(process.env.PORT ?? 8403);
@@ -48,10 +49,11 @@ async function waitHealthy(port, label, tries = 40) {
   return false;
 }
 
-// Canonical local BlockRun wallet (~/.blockrun/.session). Lives OUTSIDE
-// ~/.openclaw, so when we use it we also isolate HOME so ClawRouter's saved
-// ~/.openclaw wallet can't shadow it.
-const BLOCKRUN_WALLET = join(homedir(), ".blockrun", ".session");
+// Canonical local BlockRun wallet (~/.blockrun/.session), resolved by
+// @blockrun/core so the path stays in lock-step with every other product.
+// Lives OUTSIDE ~/.openclaw, so when we use it we also isolate HOME so
+// ClawRouter's saved ~/.openclaw wallet can't shadow it.
+const BLOCKRUN_WALLET = corePaths().session;
 
 function rd(p) { return readFileSync(p.replace(/^~/, homedir()), "utf8").trim(); }
 

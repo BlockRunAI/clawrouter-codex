@@ -1,20 +1,29 @@
 #!/usr/bin/env node
 // doctor — verify the Codex↔ClawRouter link end to end and point at whatever's
 // missing. Read-only.
+//
+// `--json` emits the BlockRun output contract from @blockrun/core
+// ({ok,data:{checks,fails}}) so the umbrella `blockrun` CLI and agents can
+// parse it; human output is unchanged.
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { ok as okEnv, err as errEnv, render } from "@blockrun/core";
 
 const PORT = process.env.PORT ?? "8403";
 const CODEX = join(homedir(), ".codex");
 const BASE = join(CODEX, "config.toml");
 const PROFILE = join(CODEX, "clawrouter.config.toml");
 const CATALOG = join(CODEX, "clawrouter-catalog.json");
+const json = process.argv.includes("--json");
 
 let fails = 0;
+const checks = [];
 function line(ok, label, note, hint) {
   if (!ok) fails++;
+  checks.push({ ok, label, ...(note ? { note } : {}), ...(!ok && hint ? { hint } : {}) });
+  if (json) return;
   console.log(`  ${ok ? "✅" : "❌"} ${label}${note ? ` — ${note}` : ""}`);
   if (!ok && hint) console.log(`       ↳ ${hint}`);
 }
@@ -25,7 +34,7 @@ async function get(url) {
 }
 const read = (f) => (existsSync(f) ? readFileSync(f, "utf8") : "");
 
-console.log("\nclawrouter-codex doctor\n");
+if (!json) console.log("\nclawrouter-codex doctor\n");
 
 // 1. bridge + mode
 let direct = true;
@@ -66,5 +75,11 @@ if (/\[profiles\.clawrouter\]/.test(read(BASE))) {
     "remove it — Codex v2 uses the separate clawrouter.config.toml");
 }
 
-console.log(`\n${fails === 0 ? "✅ all good — `codex --profile clawrouter`" : `❌ ${fails} issue(s) above`}\n`);
+if (json) {
+  const env = fails === 0 ? okEnv({ checks, fails }) : errEnv("doctor", `${fails} issue(s)`, undefined);
+  // Attach the checks to failures too, so agents always see the full picture.
+  console.log(render(fails === 0 ? env : { ...env, error: { ...env.error, checks } }, "json"));
+} else {
+  console.log(`\n${fails === 0 ? "✅ all good — `codex --profile clawrouter`" : `❌ ${fails} issue(s) above`}\n`);
+}
 process.exit(fails === 0 ? 0 : 1);
