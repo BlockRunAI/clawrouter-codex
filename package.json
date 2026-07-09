@@ -49,6 +49,7 @@
   ],
   "dependencies": {
     "@blockrun/clawrouter": "^0.12.212",
+    "@blockrun/core": "^0.0.2",
     "@blockrun/llm": "^3.5.0",
     "viem": "^2.53.1"
   }
