@@ -50,7 +50,11 @@ Usage: npx @blockrun/clawrouter-codex <command>
                      @blockrun/llm SDK, no proxy (decoupled mode)
 
 Quick start:  npx @blockrun/clawrouter-codex up
-              codex --profile clawrouter`);
+              codex --profile clawrouter
+
+Also available via the BlockRun umbrella CLI (same wallet, same commands):
+              blockrun codex <command>
+Machine output: wallet/doctor accept --json (BlockRun {ok,data|error} contract)`);
 }
 
 if (!cmd || cmd === "help" || cmd === "-h" || cmd === "--help") {

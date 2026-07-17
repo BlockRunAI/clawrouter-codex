@@ -5,7 +5,8 @@
   "type": "module",
   "license": "MIT",
   "bin": {
-    "clawrouter-codex": "bin/cli.mjs"
+    "clawrouter-codex": "bin/cli.mjs",
+    "blockrun-codex": "bin/cli.mjs"
   },
   "exports": {
     ".": "./src/server.js",
@@ -49,6 +50,7 @@
   ],
   "dependencies": {
     "@blockrun/clawrouter": "^0.12.212",
+    "@blockrun/core": "^0.0.3",
     "@blockrun/llm": "^3.5.0",
     "viem": "^2.53.1"
   }

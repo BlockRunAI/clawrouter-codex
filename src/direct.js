@@ -10,9 +10,8 @@
 //   Codex → bridge (translate) → @blockrun/llm → blockrun.ai      (no proxy)
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { LLMClient, SearchClient } from "@blockrun/llm";
+import { resolvePrivateKey, paths } from "@blockrun/core";
 
 const DEFAULT_API = process.env.BLOCKRUN_API_URL ?? "https://blockrun.ai/api";
 // Fallback model when smart routing is unavailable. Override w/ BLOCKRUN_DEFAULT_MODEL.
@@ -64,18 +63,17 @@ async function resolveRouting(model, messages, maxTokens, hasTools) {
   return { model: DEFAULT_MODEL };
 }
 
-/** Resolve the EVM wallet key: explicit env → ~/.blockrun/.session (raw 0x key). */
+/**
+ * Resolve the EVM wallet key: explicit env → ~/.blockrun/.session.
+ *
+ * Delegated to `@blockrun/core` so the resolution order (env
+ * BLOCKRUN_WALLET_KEY|BASE_CHAIN_WALLET_KEY → ~/.blockrun/.session → legacy
+ * wallet.key) is the single source of truth shared with the SDK, the umbrella
+ * `blockrun` CLI, and every other BlockRun product. Returns undefined when no
+ * wallet exists (the SDK then surfaces a funding error on first paid call).
+ */
 export function resolveWalletKey() {
-  const env = process.env.BLOCKRUN_WALLET_KEY ?? process.env.BASE_CHAIN_WALLET_KEY;
-  if (env && env.trim()) return env.trim();
-  try {
-    const raw = readFileSync(join(homedir(), ".blockrun", ".session"), "utf8");
-    const m = raw.match(/0x[0-9a-fA-F]{64}/);
-    if (m) return m[0];
-  } catch {
-    /* no local wallet — SDK will surface a funding error on first paid call */
-  }
-  return undefined;
+  return resolvePrivateKey()?.privateKey;
 }
 
 function json(obj, status = 200) {
@@ -98,7 +96,9 @@ function buildStats() {
   const empty = { days: 7, totalRequests: 0, totalCost: 0, dailyBreakdown: [], byModel: {} };
   let raw;
   try {
-    raw = readFileSync(join(homedir(), ".blockrun", "cost_log.jsonl"), "utf8");
+    // Path from @blockrun/core so BLOCKRUN_HOME isolation and any future layout
+    // change apply here too (previously hand-joined against os.homedir()).
+    raw = readFileSync(paths().costLog, "utf8");
   } catch {
     return empty;
   }
