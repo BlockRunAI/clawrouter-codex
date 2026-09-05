@@ -22,7 +22,7 @@ By default the bridge pays BlockRun **directly** via the official [`@blockrun/ll
 
 Register at [user.blockrun.ai](https://user.blockrun.ai), create an [API key](https://user.blockrun.ai/dashboard/keys), and add [credits](https://user.blockrun.ai/dashboard/credits). Export `BLOCKRUN_API_KEY` before `up`; direct mode then skips wallet discovery and sends authenticated chat, catalog and web-search requests to `https://api.blockrun.ai` (`BLOCKRUN_API_BASE_URL` overrides staging). Health and stats report account mode and link to the credits portal instead of showing wallet balance or x402 spend.
 
-This branch requires the TypeScript SDK release containing [PR #36](https://github.com/BlockRunAI/blockrun-llm-ts/pull/36); update `@blockrun/llm` from `^3.5.0` before publishing. Proxy mode requires ClawRouter PR #338 or later. Responses SSE production acceptance also needs Enterprise PR #10 deployed. New wallet users should select Solana before Base; the legacy direct wallet bridge remains Base-only and says so.
+Account mode needs `@blockrun/llm` >= 3.15.0, which is the release that exposes `authMode`; the dependency here is pinned to it, so nothing further is required to publish. New wallet users should select Solana before Base; the legacy direct wallet bridge remains Base-only and says so.
 
 ## Quick start
 
