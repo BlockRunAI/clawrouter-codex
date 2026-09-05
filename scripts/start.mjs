@@ -96,9 +96,10 @@ const PROXY_MODE = process.env.BRIDGE_MODE === "proxy" || Boolean(process.env.CL
 
 async function startDirect() {
   if (await healthy(PORT)) { log(`bridge already up on :${PORT}`); return; }
-  const { key, auto } = resolveWallet();
+  const account = process.env.BLOCKRUN_API_KEY;
+  const { key, auto } = account ? { key: undefined, auto: false } : resolveWallet();
   if (auto) log(`auto-detected BlockRun wallet at ${BLOCKRUN_WALLET}`);
-  log(`starting bridge on :${PORT} — direct mode (pays BlockRun via @blockrun/llm, no proxy)`);
+  log(`starting bridge on :${PORT} — direct mode (${account ? "account API" : "x402 wallet"})`);
   supervise("bridge", process.execPath, [join(ROOT, "src", "server.js")], {
     PORT: String(PORT),
     BLOCKRUN_DIRECT: "1",

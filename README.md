@@ -1,13 +1,13 @@
 # clawrouter-codex
 
-**Run [OpenAI Codex](https://github.com/openai/codex) on any [ClawRouter](https://github.com/BlockRunAI/ClawRouter) / BlockRun model — Claude, Gemini, DeepSeek, Kimi, GLM, Qwen, Grok, GPT and more — paid per request from a wallet (x402 USDC), no API keys.**
+**Run [OpenAI Codex](https://github.com/openai/codex) on any [ClawRouter](https://github.com/BlockRunAI/ClawRouter) / BlockRun model — Claude, Gemini, DeepSeek, Kimi, GLM, Qwen, Grok, GPT and more — using an account API key or x402 USDC on Solana or Base.**
 
 [![npm](https://img.shields.io/npm/v/@blockrun/clawrouter-codex?color=cb3837&logo=npm)](https://www.npmjs.com/package/@blockrun/clawrouter-codex)
 
 Codex only speaks the OpenAI **Responses API** (`/v1/responses`). BlockRun speaks **Chat Completions**. This is a local bridge that translates between them and pays per request, so Codex (CLI, IDE, and Desktop) can use BlockRun's models:
 
 ```
-Codex ──/v1/responses──▶ clawrouter-codex ──@blockrun/llm──▶ BlockRun   (x402 USDC, default)
+Codex ──/v1/responses──▶ clawrouter-codex ──@blockrun/llm──▶ BlockRun   (account API or x402)
 ```
 
 By default the bridge pays BlockRun **directly** via the official [`@blockrun/llm`](https://www.npmjs.com/package/@blockrun/llm) SDK (plain per-request x402 on Base) — one process, no proxy, and the model list comes live from the source. It's wire-format translation plus a few conveniences (model picker, web search, a dashboard).
@@ -18,9 +18,15 @@ By default the bridge pays BlockRun **directly** via the official [`@blockrun/ll
 
 ---
 
+## Account API setup
+
+Register at [user.blockrun.ai](https://user.blockrun.ai), create an [API key](https://user.blockrun.ai/dashboard/keys), and add [credits](https://user.blockrun.ai/dashboard/credits). Export `BLOCKRUN_API_KEY` before `up`; direct mode then skips wallet discovery and sends authenticated chat, catalog and web-search requests to `https://api.blockrun.ai` (`BLOCKRUN_API_BASE_URL` overrides staging). Health and stats report account mode and link to the credits portal instead of showing wallet balance or x402 spend.
+
+Account mode needs `@blockrun/llm` >= 3.15.0, which is the release that exposes `authMode`; the dependency here is pinned to it, so nothing further is required to publish. New wallet users should select Solana before Base; the legacy direct wallet bridge remains Base-only and says so.
+
 ## Quick start
 
-You need [Node ≥ 20](https://nodejs.org) and a funded BlockRun wallet (`~/.blockrun/.session`, or set `BLOCKRUN_WALLET_KEY`). Then:
+You need [Node ≥ 20](https://nodejs.org) and either `BLOCKRUN_API_KEY` or a funded BlockRun wallet (`~/.blockrun/.session`, or set `BLOCKRUN_WALLET_KEY`). Then:
 
 ```bash
 npx @blockrun/clawrouter-codex up       # start the bridge + write the Codex profile + build the catalog

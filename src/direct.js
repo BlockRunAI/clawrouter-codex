@@ -13,7 +13,9 @@ import { readFileSync } from "node:fs";
 import { LLMClient, SearchClient } from "@blockrun/llm";
 import { resolvePrivateKey, paths } from "@blockrun/core";
 
-const DEFAULT_API = process.env.BLOCKRUN_API_URL ?? "https://blockrun.ai/api";
+const DEFAULT_WALLET_API = process.env.BLOCKRUN_API_URL ?? "https://blockrun.ai/api";
+const DEFAULT_ACCOUNT_API = process.env.BLOCKRUN_API_BASE_URL ?? "https://api.blockrun.ai";
+const ACCOUNT_PORTAL = "https://user.blockrun.ai/dashboard/credits";
 // Fallback model when smart routing is unavailable. Override w/ BLOCKRUN_DEFAULT_MODEL.
 const DEFAULT_MODEL = process.env.BLOCKRUN_DEFAULT_MODEL ?? "anthropic/claude-opus-4.5";
 const AUTO = new Set(["blockrun/auto", "auto", ""]);
@@ -140,10 +142,13 @@ function buildStats() {
  * `http://direct/v1`.
  */
 export function createDirectFetch(opts = {}) {
-  const privateKey = opts.privateKey ?? resolveWalletKey();
-  const apiUrl = opts.apiUrl ?? DEFAULT_API;
-  const llm = new LLMClient({ privateKey, apiUrl });
-  const search = new SearchClient({ privateKey, apiUrl });
+  const apiKey = opts.apiKey ?? process.env.BLOCKRUN_API_KEY;
+  const privateKey = apiKey ? undefined : (opts.privateKey ?? resolveWalletKey());
+  const apiUrl = opts.apiUrl ?? (apiKey ? DEFAULT_ACCOUNT_API : DEFAULT_WALLET_API);
+  if (apiKey && !Object.getOwnPropertyDescriptor(LLMClient.prototype, "authMode")) throw new Error("Account mode requires the @blockrun/llm release containing PR #36.");
+  const auth = apiKey ? { apiKey, apiUrl } : { privateKey, apiUrl };
+  const llm = new LLMClient(auth);
+  const search = new SearchClient(auth);
 
   return async function directFetch(url, init = {}) {
     const path = new URL(url, "http://direct").pathname;
@@ -200,25 +205,18 @@ export function createDirectFetch(opts = {}) {
       // Health + wallet/balance for the dashboard.
       if (path.endsWith("/health")) {
         if (!String(url).includes("full=true")) return json({ status: "ok", mode: "direct" });
-        let balance = 0;
-        let address = "";
-        try { balance = await llm.getBalance(); } catch { /* leave 0 */ }
-        try { address = search.getWalletAddress(); } catch { /* leave "" */ }
-        return json({
-          status: "ok",
-          mode: "direct",
-          paymentChain: "base",
-          wallet: address,
-          address,
-          balance: `$${balance.toFixed(2)}`,
-          isEmpty: balance <= 0,
-        });
+        if (llm.authMode === "api-key") return json({ status:"ok", mode:"direct", authMode:"api-key", account:ACCOUNT_PORTAL });
+        let balance = 0; let address = "";
+        try { balance = await llm.getBalance(); } catch {}
+        try { address = search.getWalletAddress(); } catch {}
+        return json({ status:"ok", mode:"direct", paymentChain:"base", wallet:address, address, balance:`$${balance.toFixed(2)}`, isEmpty:balance<=0 });
       }
 
       // Spend stats: build a 7-day window from the SDK's local cost log
       // (~/.blockrun/cost_log.jsonl) — direct mode has no server-side ledger,
       // but the SDK records every settled payment with a timestamp.
       if (path.endsWith("/stats")) {
+        if (llm.authMode === "api-key") return json({ authMode:"api-key", costSource:"account_portal", url:ACCOUNT_PORTAL });
         return json(buildStats());
       }
 
