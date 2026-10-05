@@ -1,6 +1,6 @@
 {
   "name": "@blockrun/clawrouter-codex",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Responses bridge from Codex to BlockRun via account API keys or x402 wallets on Solana/Base.",
   "type": "module",
   "license": "MIT",
