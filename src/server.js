@@ -12,6 +12,7 @@
 import { createServer } from "node:http";
 import { responsesToChat, chatToResponsesEvents, eventsToSSE } from "./translate.js";
 import * as Dashboard from "./dashboard.js";
+import { untrustedRequestReason } from "./local-guard.js";
 
 const DEFAULT_PORT = 8403;
 const DEFAULT_UPSTREAM = "http://127.0.0.1:8402/v1";
@@ -249,6 +250,14 @@ async function passthrough(req, res, { upstream, fetchImpl = fetch }) {
 
 export function createBridge({ upstream = DEFAULT_UPSTREAM, fetchImpl = fetch } = {}) {
   return createServer((req, res) => {
+    // Only local clients: a web page in the browser must not be able to spend
+    // through the bridge or flip the dashboard switches.
+    const untrusted = untrustedRequestReason(req);
+    if (untrusted) {
+      res.writeHead(403, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { message: `forbidden: ${untrusted}` } }));
+      return;
+    }
     if (req.url === "/health" || req.url?.startsWith("/health?")) {
       // `?full=true` surfaces wallet/balance — direct mode answers from the SDK,
       // proxy mode forwards to the proxy's /health. Used by `doctor` + dashboard.
